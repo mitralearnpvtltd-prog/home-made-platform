@@ -1141,6 +1141,10 @@ body,
   animation: lp-hero-chakra 90s linear infinite;
 }
 
+.lp-abs:has(> .lp-journey) + .lp-abs > img:not(.lp-img-ready) {
+  animation-play-state: paused;
+}
+
 @keyframes lp-hero-chakra {
   from {
     transform: rotate(0deg);

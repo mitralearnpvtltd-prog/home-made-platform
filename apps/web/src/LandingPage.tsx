@@ -18,6 +18,24 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function readyImgRef(img: HTMLImageElement | null) {
+  if (!img) return;
+  const reveal = () => img.classList.add("lp-img-ready");
+  const afterLoad = () => {
+    if (typeof img.decode === "function") {
+      void img.decode().then(reveal, reveal);
+      return;
+    }
+    reveal();
+  };
+  if (img.complete && img.naturalWidth > 0) {
+    afterLoad();
+    return;
+  }
+  img.addEventListener("load", afterLoad, { once: true });
+  img.addEventListener("error", reveal, { once: true });
+}
+
 function scrollToLandingSection(section: "why" | "how") {
   const useDesktop = window.matchMedia("(min-width: 768px)").matches;
   const target = useDesktop
@@ -224,7 +242,7 @@ function LaceStoryCard() {
           A familiar meal brings you a little closer to home
         </p>
         <div style={{ position: "relative", width: 200, height: 19, margin: "40px 0 0 45px", overflow: "hidden" }}>
-          <img src={a.imgMinimalistOrangeFloralDivider1} alt="" style={{ position: "absolute", left: "-0.29%", top: "-131.25%", width: "100.58%", height: "362.5%", maxWidth: "none" }} />
+          <img src={a.imgMinimalistOrangeFloralDivider1} alt="" loading="lazy" decoding="async" style={{ position: "absolute", left: "-0.29%", top: "-131.25%", width: "100.58%", height: "362.5%", maxWidth: "none" }} />
         </div>
         <p style={{ margin: "24px 0 0", fontSize: 20, fontWeight: 300, color: "#002400", lineHeight: 1.6, maxWidth: 454 }}>
           Aahaa brings together local home cooks and travellers, with comforting meals and simple snacks available for pickup along the way.
@@ -236,8 +254,8 @@ function LaceStoryCard() {
       </div>
       <div className="lp-abs" style={{ left: 680, top: 54, width: 507, height: 650, background: "#fdd39a", border: "2px solid #ff4b2b", boxSizing: "border-box" }} />
       <div className="lp-abs" style={{ left: 686, top: 60, width: 495, height: 638, border: "2px solid #ff4b2b", boxSizing: "border-box", pointerEvents: "none" }} />
-      <img className="lp-abs" src={a.imgBrightOrangeAbstractPetalEmblem1} alt="" style={{ left: 692, top: 67, width: 28, height: 28 }} />
-      <img className="lp-abs" src={a.imgBrightOrangeAbstractPetalEmblem1} alt="" style={{ left: 1138, top: 655, width: 32, height: 32, transform: "rotate(180deg)" }} />
+      <img className="lp-abs" src={a.imgBrightOrangeAbstractPetalEmblem1} alt="" loading="lazy" decoding="async" style={{ left: 692, top: 67, width: 28, height: 28 }} />
+      <img className="lp-abs" src={a.imgBrightOrangeAbstractPetalEmblem1} alt="" loading="lazy" decoding="async" style={{ left: 1138, top: 655, width: 32, height: 32, transform: "rotate(180deg)" }} />
       <div className="lp-abs" style={{ left: 866, top: 42, width: 135, height: 125 }}>
         <div style={{ position: "absolute", left: 4, top: 0, width: 125, height: 125, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: 89, height: 89, transform: "rotate(50.18deg)", position: "relative" }}>
@@ -247,28 +265,28 @@ function LaceStoryCard() {
         <span style={{ position: "absolute", left: 0, top: 34, width: 135, fontFamily: '"Baloo 2", "Plus Jakarta Sans", sans-serif', fontWeight: 600, fontSize: 51, lineHeight: 1.09, color: "#fd451a", textAlign: "center" }}>aahaa</span>
       </div>
       <div className="lp-abs" style={{ left: 870, top: 226, width: 125, height: 12, overflow: "hidden" }}>
-        <img src={a.imgMinimalistOrangeFloralDivider1} alt="" style={{ position: "absolute", left: "-0.29%", top: "-131.25%", width: "100.58%", height: "362.5%", maxWidth: "none" }} />
+        <img src={a.imgMinimalistOrangeFloralDivider1} alt="" loading="lazy" decoding="async" style={{ position: "absolute", left: "-0.29%", top: "-131.25%", width: "100.58%", height: "362.5%", maxWidth: "none" }} />
       </div>
       <p className="lp-abs" style={{ left: 809, top: 171, margin: 0, fontSize: 24, fontWeight: 500, color: "#421406", lineHeight: 1.09 }}>Made for your journey</p>
-      <img className="lp-abs" src={a.imgSteamingRusticRiceBowlSticker1} alt="" style={{ left: 707, top: 224, width: 103, height: 95 }} />
+      <img className="lp-abs" src={a.imgSteamingRusticRiceBowlSticker1} alt="" loading="lazy" decoding="async" style={{ left: 707, top: 224, width: 103, height: 95 }} />
       <p className="lp-abs" style={{ left: 839, top: 267, margin: 0, fontSize: 20, fontWeight: 500, color: "#421406", lineHeight: 1.09 }}>Familiar flavours</p>
       <div className="lp-abs" style={{ left: 709, top: 329, width: 448, height: 0, borderTop: "1px dotted #c48a58" }} />
-      <img className="lp-abs" src={a.imgDecoratedTerracottaPotWithLid1} alt="" style={{ left: 712, top: 338, width: 94, height: 85 }} />
+      <img className="lp-abs" src={a.imgDecoratedTerracottaPotWithLid1} alt="" loading="lazy" decoding="async" style={{ left: 712, top: 338, width: 94, height: 85 }} />
       <p className="lp-abs" style={{ left: 839, top: 369, margin: 0, fontSize: 20, fontWeight: 500, color: "#421406", lineHeight: 1.09 }}>Prepared by home cooks</p>
       <div className="lp-abs" style={{ left: 709, top: 432, width: 448, height: 0, borderTop: "1px dotted #c48a58" }} />
-      <img className="lp-abs" src={a.imgKraftPaperGiftBoxWithGreenBow1} alt="" style={{ left: 707, top: 441, width: 109, height: 73 }} />
+      <img className="lp-abs" src={a.imgKraftPaperGiftBoxWithGreenBow1} alt="" loading="lazy" decoding="async" style={{ left: 707, top: 441, width: 109, height: 73 }} />
       <p className="lp-abs" style={{ left: 839, top: 466, margin: 0, fontSize: 20, fontWeight: 500, color: "#421406", lineHeight: 1.09 }}>Thoughtfully packed</p>
       <div className="lp-abs" style={{ left: 709, top: 525, width: 448, height: 0, borderTop: "1px dotted #c48a58" }} />
-      <img className="lp-abs" src={a.imgOliveGreenLeatherTrimmedTravelDuffel1} alt="" style={{ left: 704, top: 535, width: 106, height: 68 }} />
+      <img className="lp-abs" src={a.imgOliveGreenLeatherTrimmedTravelDuffel1} alt="" loading="lazy" decoding="async" style={{ left: 704, top: 535, width: 106, height: 68 }} />
       <p className="lp-abs" style={{ left: 839, top: 558, margin: 0, fontSize: 20, fontWeight: 500, color: "#421406", lineHeight: 1.09 }}>A little comfort on the road</p>
       <div className="lp-abs" style={{ left: 1144, top: 37, width: 253, height: 189, transform: "rotate(4.49deg)" }}>
         <div style={{ width: 240, height: 171, background: "#fef5dd", border: "1px solid #632508", overflow: "hidden", padding: 7, boxSizing: "border-box" }}>
           <div style={{ width: "100%", height: "100%", border: "1px solid #813206", overflow: "hidden" }}>
-            <img src={a.imgImage59} alt="" style={{ width: "103%", height: "100%", objectFit: "cover", display: "block" }} />
+            <img src={a.imgImage59} alt="" loading="lazy" decoding="async" style={{ width: "103%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
         </div>
       </div>
-      <img className="lp-abs" src={a.imgTiffinFeastAndTravelEssentials1} alt="" style={{ left: 607, top: 581, width: 396, height: 198 }} />
+      <img className="lp-abs" src={a.imgTiffinFeastAndTravelEssentials1} alt="" loading="lazy" decoding="async" style={{ left: 607, top: 581, width: 396, height: 198 }} />
     </div>
   );
 }
@@ -445,7 +463,7 @@ function DesktopLanding({
   return (
     <main className="lp-desktop">
       <div className="lp-abs" style={{ left: 0, top: 0, width: 1440, height: 821, overflow: "hidden" }}>
-        <img src={a.imgImage98} alt="" style={{ width: "100.03%", height: "103.53%", display: "block" }} />
+        <img src={a.imgImage98} alt="" fetchPriority="high" decoding="sync" style={{ width: "100.03%", height: "103.53%", display: "block" }} />
       </div>
 
       <header className="lp-abs" style={{ left: 40, top: 10, width: 1360, height: 84, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -472,13 +490,13 @@ function DesktopLanding({
         </h1>
       </div>
 
-      <img className="lp-abs lp-motion-bus-hero" src={a.imgRetroOrangeCreamBusSticker1} alt="" style={{ left: 73, top: 331, width: 102, height: 51 }} />
-      <img className="lp-abs lp-motion-scooter" src={a.imgCuteCourierOnAMintScooter1} alt="" style={{ left: 545, top: 328, width: 79, height: 52 }} />
+      <img className="lp-abs lp-motion-bus-hero" src={a.imgRetroOrangeCreamBusSticker1} alt="" decoding="async" style={{ left: 73, top: 331, width: 102, height: 51 }} />
+      <img className="lp-abs lp-motion-scooter" src={a.imgCuteCourierOnAMintScooter1} alt="" decoding="async" style={{ left: 545, top: 328, width: 79, height: 52 }} />
 
       <div className="lp-abs" style={{ left: 60, top: 378 }}>
         <div className="lp-journey">
           <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "from"} onClick={() => journey.open("from")}>
-            <img className="icon" src={a.imgBoardingTheCityBus11} alt="" />
+            <img className="icon" src={a.imgBoardingTheCityBus11} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>From</small>
               <span>{journey.fromCity}</span>
@@ -491,7 +509,7 @@ function DesktopLanding({
             </div>
           </div>
           <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "to"} onClick={() => journey.open("to")}>
-            <img className="icon" src={a.imgBusExitAdventure1} alt="" />
+            <img className="icon" src={a.imgBusExitAdventure1} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>To</small>
               <span>{journey.toCity}</span>
@@ -499,7 +517,7 @@ function DesktopLanding({
           </button>
           <div className="lp-vline" />
           <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "pickup"} onClick={() => journey.open("pickup")}>
-            <img className="icon" src={a.imgRedHattedDeliveryRiderWithParcel1} alt="" />
+            <img className="icon" src={a.imgRedHattedDeliveryRiderWithParcel1} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>Pickup point</small>
               <span>{journey.pickup ?? "Choose your stop"}</span>
@@ -508,7 +526,7 @@ function DesktopLanding({
           </button>
           <div className="lp-vline" />
           <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "date"} onClick={() => journey.open("date")}>
-            <img className="icon" src={a.imgColorfulCalendarIconWithCheckmark1} alt="" />
+            <img className="icon" src={a.imgColorfulCalendarIconWithCheckmark1} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>Date of journey</small>
               <span>{formatBarDate(journey.date)}</span>
@@ -524,15 +542,15 @@ function DesktopLanding({
         </div>
       </div>
 
-      <div className="lp-abs" style={{ left: "50%", top: 547, transform: "translateX(-50%)", width: 591, height: 272, overflow: "hidden" }}>
-        <img src={a.imgImage100} alt="" style={{ width: 591, height: 577, marginTop: 11, display: "block" }} />
+      <div className="lp-hero-chakra lp-abs" style={{ left: "50%", top: 547, transform: "translateX(-50%)", width: 591, height: 272, overflow: "hidden" }}>
+        <img src={a.imgImage100} alt="" fetchPriority="high" decoding="sync" ref={readyImgRef} style={{ width: 591, height: 577, marginTop: 11, display: "block" }} />
       </div>
-      <img className="lp-abs" src={a.imgObject} alt="" style={{ left: 1165, top: 523, width: 161, height: 199 }} />
+      <img className="lp-abs" src={a.imgObject} alt="" decoding="async" style={{ left: 1165, top: 523, width: 161, height: 199 }} />
 
       <div className="lp-abs lp-feature-row" style={{ left: "50%", top: 836, transform: "translateX(-50%)" }}>
         <article className="lp-feature">
           <img className="lp-abs" src={a.imgEllipse1714} alt="" style={{ left: 20, top: 17, width: 114, height: 99 }} />
-          <img className="lp-abs" src={a.imgIndianWomanCookingWithSteamingPot1} alt="" style={{ left: -33, top: 3, width: 214, height: 143 }} />
+          <img className="lp-abs" src={a.imgIndianWomanCookingWithSteamingPot1} alt="" decoding="async" fetchPriority="low" style={{ left: -33, top: 3, width: 214, height: 143 }} />
           <div className="lp-feature-copy">
             <h3>Local home cooks</h3>
             <p>Authentic, homely meals made by trusted home cooks in your city.</p>
@@ -540,7 +558,7 @@ function DesktopLanding({
         </article>
         <article className="lp-feature">
           <img className="lp-abs" src={a.imgEllipse1715} alt="" style={{ left: 20, top: 12, width: 117, height: 100 }} />
-          <img className="lp-abs" src={a.imgVibrantSouthIndianBananaLeafThali1} alt="" style={{ left: 0, top: 18, width: 162, height: 108 }} />
+          <img className="lp-abs" src={a.imgVibrantSouthIndianBananaLeafThali1} alt="" decoding="async" fetchPriority="low" style={{ left: 0, top: 18, width: 162, height: 108 }} />
           <div className="lp-feature-copy">
             <h3>Choose your meal</h3>
             <p>Browse a variety of home-cooked meals and pick what you love for your journey.</p>
@@ -548,7 +566,7 @@ function DesktopLanding({
         </article>
         <article className="lp-feature">
           <img className="lp-abs" src={a.imgEllipse1716} alt="" style={{ left: 3, top: 9, width: 86, height: 81 }} />
-          <img className="lp-abs" src={a.imgFriendlyBusStopMealHandover1} alt="" style={{ left: -14, top: 11, width: 190, height: 126 }} />
+          <img className="lp-abs" src={a.imgFriendlyBusStopMealHandover1} alt="" decoding="async" fetchPriority="low" style={{ left: -14, top: 11, width: 190, height: 126 }} />
           <div className="lp-feature-copy">
             <h3>Collect at your stop</h3>
             <p>Pick up your freshly prepared meal at your selected stop during your bus journey.</p>
@@ -557,10 +575,10 @@ function DesktopLanding({
       </div>
 
       <div className="lp-abs" style={{ left: "50%", top: 996, width: 167, height: 30, transform: "translateX(-50%)", overflow: "hidden", opacity: 0.52 }}>
-        <img src={a.imgElegantSymmetricalBlackFlourishDivider12} alt="" style={{ width: "100.49%", height: "183.78%", marginTop: "-14.6px", display: "block" }} />
+        <img src={a.imgElegantSymmetricalBlackFlourishDivider12} alt="" loading="lazy" decoding="async" style={{ width: "100.49%", height: "183.78%", marginTop: "-14.6px", display: "block" }} />
       </div>
       <div className="lp-abs" style={{ left: 345, top: 1074, width: 81, height: 81, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <img src={a.imgTraditionalIndianFishThaliTray1} alt="" style={{ width: 52, height: 62, transform: "rotate(45.78deg)" }} />
+        <img src={a.imgTraditionalIndianFishThaliTray1} alt="" loading="lazy" decoding="async" style={{ width: 52, height: 62, transform: "rotate(45.78deg)" }} />
       </div>
 
       <section id="why" className="lp-abs" style={{ left: 60, top: 1049, width: 1320 }}>
@@ -580,23 +598,23 @@ function DesktopLanding({
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 12, height: 500, marginTop: 40 }}>
           <article style={{ gridRow: "1 / span 2", background: "#e5ead5", borderRadius: 16, overflow: "hidden", position: "relative" }}>
-            <img className="lp-abs" src={a.imgEmbroideredGreenAndCreamBorder1} alt="" style={{ left: -35, top: -31, width: 91, height: 562 }} />
-            <img className="lp-abs" src={a.imgAahaaMealBoxWithCurryTray1} alt="" style={{ left: 140, top: 194, width: 400, height: 267 }} />
+            <img className="lp-abs" src={a.imgEmbroideredGreenAndCreamBorder1} alt="" loading="lazy" decoding="async" style={{ left: -35, top: -31, width: 91, height: 562 }} />
+            <img className="lp-abs" src={a.imgAahaaMealBoxWithCurryTray1} alt="" loading="lazy" decoding="async" style={{ left: 140, top: 194, width: 400, height: 267 }} />
           </article>
           <article style={{ background: "#f1e8d7", borderRadius: 16, overflow: "hidden", position: "relative" }}>
             <div style={{ padding: "49px 39px 0" }}>
               <h3 style={{ margin: 0, fontSize: 31, fontWeight: 500, lineHeight: 1.09 }}>Planned for your journey</h3>
               <p style={{ margin: "16px 0 0", fontSize: 19, lineHeight: 1.47, maxWidth: 424 }}>Choose your stop and arrival time to see available meals</p>
             </div>
-            <img className="lp-abs" src={a.imgMonochromeTiffinAndClockIcon1} alt="" style={{ left: 459, top: 65, width: 167, height: 141 }} />
+            <img className="lp-abs" src={a.imgMonochromeTiffinAndClockIcon1} alt="" loading="lazy" decoding="async" style={{ left: 459, top: 65, width: 167, height: 141 }} />
           </article>
           <article style={{ background: "#1b513f", borderRadius: 16, overflow: "hidden", position: "relative", color: "#fff" }}>
             <div style={{ padding: "46px 47px 0" }}>
               <h3 style={{ margin: 0, fontSize: 36, fontWeight: 500, lineHeight: 1.09 }}>A Clear place to collect.</h3>
               <p style={{ margin: "16px 0 0", fontSize: 19, lineHeight: 1.47, maxWidth: 390 }}>Pickup instructions and deliverey updates , all in one place.</p>
             </div>
-            <img className="lp-abs" src={a.imgHandGraspingTakeoutBagWithRoutePin1} alt="" style={{ left: 437, top: 39, width: 175, height: 125 }} />
-            <img className="lp-abs" src={a.imgWhiteGeometricOrnamentalBorder1} alt="" style={{ left: 533, top: 182, width: 157, height: 52 }} />
+            <img className="lp-abs" src={a.imgHandGraspingTakeoutBagWithRoutePin1} alt="" loading="lazy" decoding="async" style={{ left: 437, top: 39, width: 175, height: 125 }} />
+            <img className="lp-abs" src={a.imgWhiteGeometricOrnamentalBorder1} alt="" loading="lazy" decoding="async" style={{ left: 533, top: 182, width: 157, height: 52 }} />
           </article>
         </div>
       </section>
@@ -617,8 +635,8 @@ function DesktopLanding({
           <h2 style={{ margin: "12px 0 0", fontSize: 54, fontWeight: 600, color: "#1b513f", letterSpacing: -1.62, lineHeight: 1.09 }}>Home - cooked comfort.</h2>
           <p style={{ margin: 8, fontFamily: '"Nothing You Could Do", cursive', fontSize: 54, color: "#603811", lineHeight: 1.09 }}>Four simple steps.</p>
         </div>
-        <img className="lp-abs" src={a.imgChatGptImageOct102026031608Pm1} alt="" style={{ left: 222, top: 188, width: 922, height: 615 }} />
-        <img className="lp-abs lp-motion-bus-road" src={a.imgRetroOrangeCreamBusSticker1} alt="" />
+        <img className="lp-abs" src={a.imgChatGptImageOct102026031608Pm1} alt="" loading="lazy" decoding="async" style={{ left: 222, top: 188, width: 922, height: 615 }} />
+        <img className="lp-abs lp-motion-bus-road" src={a.imgRetroOrangeCreamBusSticker1} alt="" loading="lazy" decoding="async" />
         <img className="lp-abs" src={a.imgVector2706} alt="" style={{ left: 338, top: 384, width: 603, height: 286 }} />
         <Step n="01" title="Plan your journey" body="Choose your start, destination and pickup stop." left={60} top={100} />
         <Step n="02" title="Choose a home cook" body="See cooks available near your chosen stop." left={1128} top={100} />
@@ -627,7 +645,7 @@ function DesktopLanding({
       </section>
 
       <div className="lp-abs lp-traveller-flourish" style={{ left: "50%", top: 2596, width: 203, height: 37, overflow: "hidden", opacity: 0.7 }}>
-        <img src={a.imgElegantSymmetricalBlackFlourishDivider12} alt="" style={{ width: "100.49%", height: "183.78%", marginTop: "-18px", display: "block" }} />
+        <img src={a.imgElegantSymmetricalBlackFlourishDivider12} alt="" loading="lazy" decoding="async" style={{ width: "100.49%", height: "183.78%", marginTop: "-18px", display: "block" }} />
       </div>
 
       <section ref={travellerRef} className="lp-abs lp-pin" style={{ left: 40, top: 2660, width: 1360, textAlign: "center" }}>
@@ -657,22 +675,22 @@ function DesktopLanding({
         { left: 1230, width: 210 },
       ].map((item) => (
         <div key={item.left} className="lp-abs lp-pin" style={{ left: item.left, top: 3382, width: item.width, height: 45, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.9 }}>
-          <img src={a.imgOrnateLotusLaceBorder1} alt="" style={{ width: 45, height: item.width, transform: "rotate(-90deg)" }} />
+          <img src={a.imgOrnateLotusLaceBorder1} alt="" loading="lazy" decoding="async" style={{ width: 45, height: item.width, transform: "rotate(-90deg)" }} />
         </div>
       ))}
       <div ref={laceRef} className="lp-abs" style={{ left: 0, top: 3382, width: 1440, height: 45, pointerEvents: "none" }} aria-hidden="true" />
       <div ref={pairRef} className="lp-abs lp-motion-lace-pair" aria-hidden="true">
         <LaceStoryCard />
         <div className="lp-motion-bus-lace">
-          <img src={a.imgChatGptImageOct82026121808Pm1} alt="" />
+          <img src={a.imgChatGptImageOct82026121808Pm1} alt="" loading="lazy" decoding="async" />
         </div>
       </div>
 
       <p className="lp-abs" style={{ left: "50%", top: 3839, transform: "translate(-50%, -100%)", letterSpacing: 3.6, color: "#052617", fontWeight: 500, fontSize: 18, margin: 0 }}>
         HERE TO HELP
       </p>
-      <img className="lp-abs lp-pin" src={a.imgSymmetricalCoralAndOliveRangoliOrnament1} alt="" style={{ left: 40, top: 3438, width: 59, height: 69 }} />
-      <img className="lp-abs lp-pin" src={a.imgSymmetricalCoralAndOliveRangoliOrnament1} alt="" style={{ left: 1341, top: 3438, width: 59, height: 69 }} />
+      <img className="lp-abs lp-pin" src={a.imgSymmetricalCoralAndOliveRangoliOrnament1} alt="" loading="lazy" decoding="async" style={{ left: 40, top: 3438, width: 59, height: 69 }} />
+      <img className="lp-abs lp-pin" src={a.imgSymmetricalCoralAndOliveRangoliOrnament1} alt="" loading="lazy" decoding="async" style={{ left: 1341, top: 3438, width: 59, height: 69 }} />
 
       <section className="lp-abs" style={{ left: 60, top: 3901, width: 510 }}>
         <h2 style={{ fontSize: 60, fontWeight: 500, letterSpacing: -1.8, margin: 0, lineHeight: 1.09 }}>
@@ -682,7 +700,7 @@ function DesktopLanding({
         </h2>
         <p style={{ color: "#421406", fontSize: 22, margin: "26px 0 0", lineHeight: 1.09 }}>Helpfull answer for a smoother pickup</p>
       </section>
-      <img className="lp-abs" src={a.imgAahaaBusStopDeliveryScene1} alt="" style={{ left: 60, top: 4117, width: 469, height: 282 }} />
+      <img className="lp-abs" src={a.imgAahaaBusStopDeliveryScene1} alt="" loading="lazy" decoding="async" style={{ left: 60, top: 4117, width: 469, height: 282 }} />
       <div className="lp-abs" style={{ left: 60, top: 4426 }}>
         <p style={{ color: "#421406", fontSize: 20, margin: "0 0 20px", lineHeight: 1.09 }}>Need more help !</p>
         <button className="lp-support" type="button" aria-disabled="true">
@@ -695,10 +713,10 @@ function DesktopLanding({
       </div>
 
       <div className="lp-abs" style={{ left: "50%", top: 4555, width: 185, height: 34, transform: "translateX(-50%)", overflow: "hidden", opacity: 0.7 }}>
-        <img src={a.imgSymmetricalFloralScrollDivider1} alt="" style={{ width: "100.27%", height: "181.16%", marginTop: "-14px", display: "block" }} />
+        <img src={a.imgSymmetricalFloralScrollDivider1} alt="" loading="lazy" decoding="async" style={{ width: "100.27%", height: "181.16%", marginTop: "-14px", display: "block" }} />
       </div>
       <div className="lp-abs" style={{ left: 60, top: 4615, width: 1320, height: 260, background: "#edefe2", borderRadius: 12 }} />
-      <img className="lp-abs" src={a.imgFriendlyBusStopParcelHandoff2} alt="" style={{ left: 84, top: 4657, width: 287, height: 191 }} />
+      <img className="lp-abs" src={a.imgFriendlyBusStopParcelHandoff2} alt="" loading="lazy" decoding="async" style={{ left: 84, top: 4657, width: 287, height: 191 }} />
       <img className="lp-abs" src={a.imgLine10} alt="" style={{ left: 471, top: 4656, width: 1, height: 173 }} />
       <div className="lp-abs" style={{ left: 526, top: 4658, width: 768 }}>
         <h2 style={{ fontSize: 38, fontWeight: 400, letterSpacing: -1.14, margin: 0, lineHeight: 1.09 }}>Taking a journey soon ?</h2>
@@ -707,9 +725,9 @@ function DesktopLanding({
           Find your pickup point
         </button>
       </div>
-      <img className="lp-abs" src={a.imgElegantGoldenFloralCornerOrnament1} alt="" style={{ left: 1273, top: 4790, width: 89, height: 67, opacity: 0.74 }} />
+      <img className="lp-abs" src={a.imgElegantGoldenFloralCornerOrnament1} alt="" loading="lazy" decoding="async" style={{ left: 1273, top: 4790, width: 89, height: 67, opacity: 0.74 }} />
       <div className="lp-footer-chakra" aria-hidden="true">
-        <img className="lp-abs lp-motion-mandala" src={a.imgOrnateFloralMandalaWheel1} alt="" style={{ left: 71, top: 71, width: 400, height: 400, opacity: 0.3 }} />
+        <img className="lp-abs lp-motion-mandala" src={a.imgOrnateFloralMandalaWheel1} alt="" loading="lazy" decoding="async" style={{ left: 71, top: 71, width: 400, height: 400, opacity: 0.3 }} />
       </div>
 
       <footer className="lp-abs" style={{ left: 60, top: 4911, width: 340 }}>
@@ -787,7 +805,7 @@ function Traveller({
     <article style={{ width: 391, textAlign: "center" }}>
       <div style={{ height: 294, overflow: "hidden" }}>
         <div style={{ position: "relative", width: 350, height: 695, margin: "0 auto", borderRadius: 449, background: bg, overflow: "hidden" }}>
-          <img src={src} alt="" style={{ position: "absolute", width: imgW, height: imgH, top: imgTop, left: imgLeft, objectFit: "cover" }} />
+          <img src={src} alt="" loading="lazy" decoding="async" style={{ position: "absolute", width: imgW, height: imgH, top: imgTop, left: imgLeft, objectFit: "cover" }} />
         </div>
       </div>
       <img src={a.imgLine6} alt="" style={{ width: 384, height: 1, display: "block", margin: "0 auto" }} />
