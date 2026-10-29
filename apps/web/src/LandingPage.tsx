@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode }
 import * as a from "./assets/landing";
 import imgAahaaBannerSoftTheme from "./assets/mobile-landing/imgAahaaBannerSoftTheme.png";
 import imgImage111 from "./assets/mobile-landing/imgImage111.png";
+import mlpIslandMask1 from "./assets/mobile-landing/mlp-island-mask-1.png";
+import mlpIslandMask2 from "./assets/mobile-landing/mlp-island-mask-2.png";
+import mlpIslandMask3 from "./assets/mobile-landing/mlp-island-mask-3.png";
+import mlpIslandMask4 from "./assets/mobile-landing/mlp-island-mask-4.png";
 import imgImage130 from "./assets/mobile-landing/imgImage130.png";
 import imgImage160 from "./assets/mobile-landing/imgImage160.png";
 import imgAahaaBusStopDeliveryScene3 from "./assets/mobile-landing/imgAahaaBusStopDeliveryScene3.png";
@@ -735,11 +739,11 @@ function DesktopLanding({
         <img src={a.imgLine13} alt="" style={{ width: 1, height: 179 }} />
         <FooterCol title="Work with us" items={["Become a cook", "Become a delivery partner"]} width={248} />
       </div>
-      <p className="lp-abs" style={{ left: 60, top: 5268, display: "flex", gap: 12, alignItems: "center", margin: 0, color: "#a68882", fontSize: 17, lineHeight: 1.09 }}>
+      <p className="lp-abs" style={{ left: 60, top: 5268, zIndex: 2, display: "flex", gap: 12, alignItems: "center", margin: 0, color: "#a68882", fontSize: 17, lineHeight: 1.09 }}>
         <img src={a.imgCopyrightStreamlineSolarAr} width={24} height={24} alt="" />
         2026 Aahaa Pvt Ltd . All rights reserved.
       </p>
-      <p className="lp-abs" style={{ left: 1089, top: 5271, display: "flex", gap: 24, margin: 0, color: "#a68882", fontSize: 17, lineHeight: 1.09 }}>
+      <p className="lp-abs" style={{ left: 1089, top: 5271, zIndex: 2, display: "flex", gap: 24, margin: 0, color: "#a68882", fontSize: 17, lineHeight: 1.09 }}>
         <span>Privacy Policy</span>
         <span>Terms & Conditions</span>
       </p>
@@ -1404,6 +1408,7 @@ function FigmaMobileLanding() {
         iconH={19}
         iconLeft={3}
         iconTop={5}
+        glyph="from"
         editable
         onFocus={() => {
           setSuggest("from");
@@ -1427,6 +1432,7 @@ function FigmaMobileLanding() {
         iconH={19}
         iconLeft={-2}
         iconTop={3}
+        glyph="to"
         boxed
         editable
         onFocus={() => {
@@ -1455,6 +1461,7 @@ function FigmaMobileLanding() {
         iconH={21}
         iconLeft={1}
         iconTop={3}
+        glyph="pickup"
         boxed
         editable
         onFocus={() => {
@@ -1468,7 +1475,7 @@ function FigmaMobileLanding() {
         }}
       />
       <hr className="mlp-abs mlp-hairline" style={{ left: 34, top: Y(401), width: 322 }} />
-      <JourneyField left={34} top={Y(411)} width={322} label="Date of journey" value={date ? formatBarDate(date) : "Select date"} icon={a.imgColorfulCalendarIconWithCheckmark1} iconW={18} iconH={17} iconLeft={6} iconTop={5} boxed expanded={panel === "date"} onOpen={() => openPanel("date")} />
+      <JourneyField left={34} top={Y(411)} width={322} label="Date of journey" value={date ? formatBarDate(date) : "Select date"} icon={a.imgColorfulCalendarIconWithCheckmark1} iconW={18} iconH={17} iconLeft={6} iconTop={5} glyph="date" boxed expanded={panel === "date"} onOpen={() => openPanel("date")} />
       <button className="mlp-abs mlp-search" type="button" aria-disabled="true" style={{ left: 34, top: Y(459) }}>
         <img src={a.imgMagniferStreamlineSolarAr} width={20} height={20} alt="" />
         Search Amma food
@@ -1540,6 +1547,26 @@ function FigmaMobileLanding() {
 
       <div className="mlp-abs mlp-road-stage" style={{ left: 16, top: Y(1049), width: 358, height: 473 }}>
         <img src={imgImage111} alt="" />
+        {(
+          [
+            ["1", mlpIslandMask1, "168px 63px"],
+            ["2", mlpIslandMask2, "230px 196px"],
+            ["3", mlpIslandMask3, "215px 295px"],
+            ["4", mlpIslandMask4, "230px 402px"],
+          ] as const
+        ).map(([id, mask, origin]) => (
+          <span
+            key={id}
+            className={`mlp-hotspot mlp-hotspot--${id}`}
+            style={{ ["--mlp-mask" as string]: `url(${mask})`, ["--mlp-origin" as string]: origin }}
+            aria-hidden="true"
+          >
+            <span className="mlp-hotspot-mute">
+              <img src={imgImage111} alt="" />
+            </span>
+            <img className="mlp-hotspot-pop" src={imgImage111} alt="" />
+          </span>
+        ))}
         <img className="mlp-bus-road" src={imgRetroOrangeCreamBusSticker3} alt="" width={72} height={35} />
       </div>
       <MlpStep n="01" title="Plan your journey" left={16} top={Y(1034)} width={126} />
@@ -1805,6 +1832,47 @@ function SuggestMenu({
   );
 }
 
+function FieldGlyph({
+  kind,
+  icon,
+}: {
+  kind: "from" | "to" | "pickup" | "date";
+  icon: string;
+  iconW: number;
+  iconH: number;
+  iconLeft: number;
+  iconTop: number;
+  boxed?: boolean;
+}) {
+  if (kind === "from") {
+    return (
+      <div style={{ position: "relative", width: 30, height: 29, flex: "none" }}>
+        <img src={icon} alt="" style={{ position: "absolute", left: 3, top: 5, width: 24, height: 19, objectFit: "cover" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative", width: 30, height: 32, flex: "none" }}>
+      <div style={{ position: "absolute", left: 7, top: 5, width: 22.22, height: 22.22, overflow: "hidden" }}>
+        {kind === "to" ? (
+          <img src={icon} alt="" style={{ position: "absolute", left: -2, top: 3, width: 24, height: 19, objectFit: "cover" }} />
+        ) : (
+          <div style={{ position: "absolute", left: -2, top: -2, width: 24, height: 24, overflow: "hidden" }}>
+            {kind === "pickup" ? (
+              <img src={icon} alt="" style={{ position: "absolute", left: 1, top: 3, width: 24, height: 21, objectFit: "cover" }} />
+            ) : (
+              <div style={{ position: "absolute", left: 6, top: 5, width: 18, height: 17, overflow: "hidden" }}>
+                <img src={icon} alt="" style={{ position: "absolute", left: "-6.9%", top: "-3.29%", width: "113.45%", height: "107.38%", maxWidth: "none" }} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function JourneyField({
   left,
   top,
@@ -1817,6 +1885,7 @@ function JourneyField({
   iconH,
   iconLeft,
   iconTop,
+  glyph,
   boxed,
   expanded,
   editable,
@@ -1835,6 +1904,7 @@ function JourneyField({
   iconH: number;
   iconLeft: number;
   iconTop: number;
+  glyph: "from" | "to" | "pickup" | "date";
   boxed?: boolean;
   expanded?: boolean;
   editable?: boolean;
@@ -1845,9 +1915,7 @@ function JourneyField({
   return (
     <div className="mlp-abs mlp-row mlp-field-btn" style={{ left, top, width, justifyContent: "space-between" }} onClick={editable ? undefined : onOpen}>
       <div className="mlp-row" style={{ gap: 16, minWidth: 0, flex: 1 }}>
-        <div style={{ position: "relative", width: 30, height: boxed ? 32 : 29, flex: "none" }}>
-          <img src={icon} alt="" style={{ position: "absolute", left: iconLeft, top: iconTop, width: iconW, height: iconH, objectFit: "cover" }} />
-        </div>
+        <FieldGlyph kind={glyph} icon={icon} iconW={iconW} iconH={iconH} iconLeft={iconLeft} iconTop={iconTop} boxed={boxed} />
         {editable ? (
           <label className="mlp-field-copy">
             <span>{label}</span>
