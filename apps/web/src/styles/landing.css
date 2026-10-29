@@ -18,7 +18,7 @@ body,
 .lp-desktop {
   position: relative;
   width: 1440px;
-  height: 5386px;
+  height: 5338px;
   margin: 0 auto;
   overflow: hidden;
   background: #fef9f3;
@@ -757,10 +757,10 @@ body,
 
   .lp-scale {
     width: 1440px;
-    height: 5386px;
+    height: 5338px;
     transform: scale(calc(100vw / 1440px));
     transform-origin: top left;
-    margin-bottom: calc(5386px * (100vw / 1440px - 1));
+    margin-bottom: calc(5338px * (100vw / 1440px - 1));
   }
 }
 
