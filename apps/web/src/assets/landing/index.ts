@@ -45,6 +45,7 @@ export { default as imgLine6 } from './imgLine6.svg';
 export { default as imgLine7 } from './imgLine7.svg';
 export { default as imgLine8 } from './imgLine8.svg';
 export { default as imgLine9 } from './imgLine9.svg';
+export { default as imgLoginTiffin } from './imgLoginTiffin.png';
 export { default as imgMagniferStreamlineSolarAr } from './imgMagniferStreamlineSolarAr.svg';
 export { default as imgMinimalistOrangeFloralDivider1 } from './imgMinimalistOrangeFloralDivider1.png';
 export { default as imgMapPointStreamlineSolar } from './imgMapPointStreamlineSolar.svg';

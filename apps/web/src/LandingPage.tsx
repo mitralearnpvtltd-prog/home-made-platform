@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import * as a from "./assets/landing";
+import { navigate, PATHS } from "./navigation";
 import imgAahaaBannerSoftTheme from "./assets/mobile-landing/imgAahaaBannerSoftTheme.png";
 import imgImage111 from "./assets/mobile-landing/imgImage111.png";
 import mlpIslandMask1 from "./assets/mobile-landing/mlp-island-mask-1.png";
@@ -217,7 +218,7 @@ function DesktopLandingPage() {
   return (
     <div className="lp-root">
       <div className="lp-scale">
-        <DesktopLanding openFaq={openFaq} setOpenFaq={setOpenFaq} journey={journey} />
+        <DesktopLanding openFaq={openFaq} setOpenFaq={setOpenFaq} journey={journey} onLogin={() => navigate(PATHS.login)} />
       </div>
       <JourneyOverlay journey={journey} />
     </div>
@@ -362,10 +363,12 @@ function DesktopLanding({
   openFaq,
   setOpenFaq,
   journey,
+  onLogin,
 }: {
   openFaq: number;
   setOpenFaq: (index: number) => void;
   journey: JourneySearch;
+  onLogin: () => void;
 }) {
   const laceRef = useRef<HTMLDivElement>(null);
   const pairRef = useRef<HTMLDivElement>(null);
@@ -410,7 +413,7 @@ function DesktopLanding({
       const inView = !!(view && view.width > 0 && view.top < window.innerHeight && view.bottom > 0);
       if (inView) begin();
 
-      if (scrollDir < 0 && trip && trip.playState === "finished" && (trip.currentTime ?? 0) > 0) {
+      if (scrollDir < 0 && trip && trip.playState === "finished" && Number(trip.currentTime ?? 0) > 0) {
         trip.cancel();
         started = false;
         begin();
@@ -475,7 +478,7 @@ function DesktopLanding({
           <a className="lp-active" href="#how" onClick={(event) => onSectionNav(event, "how")}>
             How its works
           </a>
-          <button className="lp-login" type="button" aria-disabled="true">
+          <button className="lp-login" type="button" onClick={onLogin}>
             Log in
           </button>
         </nav>
@@ -1396,7 +1399,7 @@ function FigmaMobileLanding() {
           <span>aahaa</span>
         </div>
         <div className="mlp-row" style={{ gap: 20 }}>
-          <button className="mlp-login" type="button" aria-disabled="true">
+          <button className="mlp-login" type="button" onClick={() => navigate(PATHS.login)}>
             Log in
           </button>
           <div className="mlp-burger" aria-hidden="true">

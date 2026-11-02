@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { LandingPage } from "./LandingPage";
+import { App } from "./App";
 import "./styles/global.css";
 import "./styles/landing.css";
 
@@ -12,6 +12,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <LandingPage />
+    <App />
   </StrictMode>,
 );
