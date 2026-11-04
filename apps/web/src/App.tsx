@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AuthOverlay } from "./AuthOverlay";
+import { CookPages } from "./CookPages";
 import { LandingPage } from "./LandingPage";
 import { AUTH_PATHS, currentPath, PATHS } from "./navigation";
 import { PlaceholderPage } from "./PlaceholderPage";
@@ -13,6 +14,15 @@ export function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  if (
+    path === PATHS.cooks ||
+    path === PATHS.lakshmiMenu ||
+    path === PATHS.lemonRice ||
+    path === PATHS.editJourney
+  ) {
+    return <CookPages path={path} />;
+  }
 
   if (path === PATHS.terms || path === PATHS.privacy || (!AUTH_PATHS.has(path) && path !== PATHS.home)) {
     return <PlaceholderPage path={path} />;

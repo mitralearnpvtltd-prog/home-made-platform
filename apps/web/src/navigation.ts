@@ -5,6 +5,10 @@ export const PATHS = {
   otp: "/otp",
   registerOtp: "/register/otp",
   registerSuccess: "/register/success",
+  cooks: "/cooks",
+  lakshmiMenu: "/cooks/lakshmi",
+  lemonRice: "/cooks/lakshmi/lemon-rice",
+  editJourney: "/cooks/journey",
   terms: "/terms",
   privacy: "/privacy",
 } as const;

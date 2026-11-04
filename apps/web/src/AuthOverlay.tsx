@@ -249,7 +249,7 @@ export function AuthOverlay({
               }
               if (otp.join("") === DEV_OTP) {
                 setOtpError(false);
-                navigate(isRegisterOtp ? PATHS.registerSuccess : PATHS.home);
+                navigate(isRegisterOtp ? PATHS.registerSuccess : PATHS.cooks);
                 return;
               }
               setOtpError(true);
@@ -422,7 +422,7 @@ export function AuthOverlay({
                 on Aahaa.
               </p>
             </div>
-            <button className="lp-login-otp lp-register-success-cta" type="button" onClick={() => navigate(PATHS.home)}>
+            <button className="lp-login-otp lp-register-success-cta" type="button" onClick={() => navigate(PATHS.cooks)}>
               <span className="lp-register-desktop-cta">Find home-cooked food</span>
               <span className="lp-register-mobile-cta">Continue</span>
             </button>

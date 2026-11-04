@@ -157,6 +157,7 @@ Unresolved business decisions in the approved scope remain unresolved.
 The following text is preserved verbatim. It is the approved guiding project workflow and technical planning reference. Approval of this reference does not approve every proposed feature or technical choice inside it.
 
 ---
+
 # **PROJECT CONSTITUTION & ARCHITECTURE SETUP**
 
 ## **Food Delivery Platform for Bus Passengers**
@@ -247,7 +248,7 @@ My proposed technologies are:
 
 ## **Backend**
 
-- Next.js
+- Nest JS
 - Express.js
 - REST APIs
 - Server-side business logic and request validation
