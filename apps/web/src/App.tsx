@@ -17,7 +17,24 @@ export function App() {
 
   if (
     path === PATHS.cooks ||
+    path === PATHS.cart ||
     path === PATHS.lakshmiMenu ||
+    path === PATHS.mealBag ||
+    path === PATHS.reviewOrder ||
+    path === PATHS.confirmPickup ||
+    path === PATHS.paymentMethod ||
+    path === PATHS.paymentStatus ||
+    path === PATHS.invoice ||
+    path === PATHS.orderSummary ||
+    path === PATHS.trackOrder ||
+    path === PATHS.profile ||
+    path === PATHS.accountDetails ||
+    path === PATHS.myOrders ||
+    path === PATHS.notifications ||
+    path === PATHS.appSettings ||
+    path === PATHS.helpSupport ||
+    path === PATHS.about ||
+    path === PATHS.logout ||
     path === PATHS.lemonRice ||
     path === PATHS.editJourney
   ) {

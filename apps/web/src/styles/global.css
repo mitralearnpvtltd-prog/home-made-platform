@@ -19,6 +19,18 @@ body {
   font-weight: var(--weight-regular);
 }
 
+@media (max-width: 767px) {
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100dvh;
+  }
+}
+
 button,
 input {
   font: inherit;

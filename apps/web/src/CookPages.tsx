@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
 import {
   cookLakshmiMenu,
   editBusStop,
@@ -15,6 +15,14 @@ import {
   metaRiceBowl,
   serveCloche,
 } from "./assets/cooks";
+import trackMapBase from "./assets/cooks/trackMapBase.svg";
+import imgKitchenLakshmi from "./assets/mobile-landing/imgKitchenLakshmi.png";
+import paymentKitchen from "./assets/payment/payment-kitchen.png";
+import paymentCompleteSuccess from "./assets/payment/payment-complete-success.png";
+import paymentCompleteInvoice from "./assets/payment/payment-complete-invoice.png";
+import paymentGooglePayLogo from "./assets/payment/payment-google-pay.svg";
+import paymentPhonePeLogo from "./assets/payment/payment-phonepe.svg";
+import paymentPaytmLogo from "./assets/payment/payment-paytm.svg";
 import * as a from "./assets/landing";
 import {
   COOKS,
@@ -33,6 +41,7 @@ import {
   type MealCategory,
 } from "./cookData";
 import { navigate, PATHS } from "./navigation";
+import { CartPage } from "./CartPage";
 import "./styles/cook.css";
 
 type CookFilter = "all" | "meals-snacks" | "snacks" | "veg" | "nonveg";
@@ -40,6 +49,7 @@ type CookSort = "default" | "price-asc" | "price-desc";
 type MenuTab = "all" | MealCategory;
 type JourneyPanel = "from" | "to" | "pickup" | "date" | "time" | null;
 type BagLine = { meal: Meal; qty: number };
+type PaymentMethod = "google-pay" | "phonepe" | "paytm" | "other-upi";
 
 const INITIAL_BAG: BagLine[] = LAKSHMI_MEALS.filter((meal) => meal.id === "lemon-rice" || meal.id === "banana-chips").map(
   (meal) => ({ meal, qty: 1 }),
@@ -62,6 +72,14 @@ export function CookPages({ path }: { path: string }) {
   const [bag, setBag] = useState<BagLine[]>(INITIAL_BAG);
   const [journey, setJourney] = useState<JourneyChoice>(INITIAL_JOURNEY);
   const [journeyPanel, setJourneyPanel] = useState<JourneyPanel>(null);
+  const [kitchenNote, setKitchenNote] = useState("");
+  const [pickupName, setPickupName] = useState("Ananya Rao");
+  const [pickupPhone, setPickupPhone] = useState("+91 9876543210");
+  const [collectionPoint, setCollectionPoint] = useState("Main entrance near bus-stop sign");
+  const [pickupNote, setPickupNote] = useState("");
+  const [pickupConfirmed, setPickupConfirmed] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("google-pay");
+  const [upiId, setUpiId] = useState("");
 
   function addMeal(meal: Meal) {
     setBag((current) => {
@@ -82,9 +100,28 @@ export function CookPages({ path }: { path: string }) {
 
   const bagCount = bag.reduce((sum, line) => sum + line.qty, 0);
   const stop = pickupMeta(journey.pickup);
-  const returnTo = useRef(PATHS.cooks);
+  const returnTo = useRef<string>(PATHS.cooks);
+  const paymentBackTo = useRef<string>(PATHS.confirmPickup);
+  const confirmPickupBackTo = useRef<string>(PATHS.reviewOrder);
   const editing = path === PATHS.editJourney;
   const mealDetail = path === PATHS.lemonRice;
+  const mealBagPage = path === PATHS.mealBag;
+  const reviewOrderPage = path === PATHS.reviewOrder;
+  const confirmPickupPage = path === PATHS.confirmPickup;
+  const paymentMethodPage = path === PATHS.paymentMethod;
+  const paymentStatusPage = path === PATHS.paymentStatus;
+  const invoicePage = path === PATHS.invoice;
+  const orderSummaryPage = path === PATHS.orderSummary;
+  const trackOrderPage = path === PATHS.trackOrder;
+  const profilePage = path === PATHS.profile;
+  const accountDetailsPage = path === PATHS.accountDetails;
+  const myOrdersPage = path === PATHS.myOrders;
+  const notificationsPage = path === PATHS.notifications;
+  const settingsPage = path === PATHS.appSettings;
+  const helpSupportPage = path === PATHS.helpSupport;
+  const aboutPage = path === PATHS.about;
+  const logoutPage = path === PATHS.logout;
+  const accountPage = profilePage || accountDetailsPage || myOrdersPage || notificationsPage || settingsPage || helpSupportPage || aboutPage || logoutPage;
   const onMenu = path === PATHS.lakshmiMenu || mealDetail;
 
   useEffect(() => {
@@ -95,25 +132,88 @@ export function CookPages({ path }: { path: string }) {
     ? "ck-page ck-page--menu ck-page--meal"
     : path === PATHS.lakshmiMenu
       ? "ck-page ck-page--menu"
+      : reviewOrderPage || confirmPickupPage
+        || paymentMethodPage || paymentStatusPage || invoicePage || orderSummaryPage || trackOrderPage
+        ? "ck-page ck-page--checkout"
+        : accountPage
+          ? `ck-page ck-page--profile${myOrdersPage ? " ck-page--orders" : ""}`
       : path === PATHS.editJourney
         ? "ck-page ck-page--edit"
         : "ck-page";
 
+  if (path === PATHS.cart) {
+    return (
+      <CartPage
+        bag={bag}
+        journey={journey}
+        stop={stop}
+        setQty={setQty}
+        onBack={() => navigate(PATHS.cooks)}
+        onEditJourney={() => navigate(PATHS.editJourney)}
+        onProceed={() => {
+          paymentBackTo.current = PATHS.cart;
+          navigate(PATHS.paymentMethod);
+        }}
+      />
+    );
+  }
+
   return (
     <div className={pageClass}>
+      {paymentMethodPage || paymentStatusPage || orderSummaryPage || notificationsPage || settingsPage ? <MobileStatusBar /> : null}
       <CookHeader
-        bagCount={onMenu ? bagCount : 0}
-        showBack={onMenu}
-        listingCart={path === PATHS.cooks}
-        backTo={mealDetail ? PATHS.lakshmiMenu : PATHS.cooks}
+        bagCount={onMenu || mealBagPage || reviewOrderPage || confirmPickupPage || paymentMethodPage || paymentStatusPage || invoicePage || orderSummaryPage || trackOrderPage || myOrdersPage ? bagCount : 0}
+        hideCart={accountPage && !myOrdersPage}
+        profilePage={accountPage}
+        hideProfileOnMobile={
+          accountPage || trackOrderPage || path === PATHS.cooks || path === PATHS.lakshmiMenu || path === PATHS.lemonRice
+        }
+        showBack={onMenu || mealBagPage || reviewOrderPage || confirmPickupPage || paymentMethodPage || myOrdersPage || accountDetailsPage}
+        listingCart={path === PATHS.cooks || myOrdersPage}
+        backTo={
+          invoicePage
+            ? PATHS.home
+            : paymentMethodPage
+              ? paymentBackTo.current
+              : confirmPickupPage
+                ? confirmPickupBackTo.current
+                : reviewOrderPage
+              ? PATHS.mealBag
+              : accountDetailsPage
+                ? PATHS.profile
+                : mealDetail || mealBagPage
+              ? PATHS.lakshmiMenu
+              : PATHS.cooks
+        }
       />
       {editing ? <div className="ck-edit-hairline" /> : null}
       {editing ? (
         <EditJourney journey={journey} setJourney={setJourney} returnTo={returnTo.current} />
       ) : (
         <>
-          <JourneyBar journey={journey} setJourney={setJourney} panel={journeyPanel} setPanel={setJourneyPanel} />
-          {mealDetail ? (
+          {accountPage ? null : <JourneyBar journey={journey} setJourney={setJourney} panel={journeyPanel} setPanel={setJourneyPanel} />}
+          {accountDetailsPage ? (
+            <AccountDetailsPage />
+          ) : profilePage ? (
+            <ProfilePage
+              onPaymentMethods={() => {
+                paymentBackTo.current = PATHS.profile;
+                navigate(PATHS.paymentMethod);
+              }}
+            />
+          ) : myOrdersPage ? (
+            <MyOrdersPage />
+          ) : notificationsPage ? (
+            <NotificationsPage />
+          ) : settingsPage ? (
+            <AppSettingsPage />
+          ) : helpSupportPage ? (
+            <HelpSupportPage bag={bag} journey={journey} stop={stop} />
+          ) : aboutPage ? (
+            <AboutAahaaPage />
+          ) : logoutPage ? (
+            <LogoutPage />
+          ) : mealDetail ? (
             <LemonRiceDetail
               bag={bag}
               addMeal={addMeal}
@@ -122,14 +222,116 @@ export function CookPages({ path }: { path: string }) {
               stop={stop}
             />
           ) : path === PATHS.lakshmiMenu ? (
-            <LakshmiMenu bag={bag} addMeal={addMeal} setQty={setQty} journey={journey} stop={stop} />
+            <LakshmiMenu
+              bag={bag}
+              addMeal={addMeal}
+              setQty={setQty}
+              journey={journey}
+              stop={stop}
+              onContinue={() => navigate(PATHS.mealBag)}
+            />
+          ) : mealBagPage ? (
+            <MealBagPage
+              bag={bag}
+              addMeal={addMeal}
+              setQty={setQty}
+              journey={journey}
+              stop={stop}
+              kitchenNote={kitchenNote}
+              setKitchenNote={setKitchenNote}
+              onContinue={() => {
+                const mobile = window.matchMedia("(max-width: 767px)").matches;
+                confirmPickupBackTo.current = mobile ? PATHS.reviewOrder : PATHS.mealBag;
+                navigate(mobile ? PATHS.reviewOrder : PATHS.confirmPickup);
+              }}
+            />
+          ) : reviewOrderPage ? (
+            <ReviewOrderPage
+              bag={bag}
+              journey={journey}
+              stop={stop}
+              kitchenNote={kitchenNote}
+              onContinue={() => {
+                confirmPickupBackTo.current = PATHS.reviewOrder;
+                navigate(PATHS.confirmPickup);
+              }}
+            />
+          ) : confirmPickupPage ? (
+            <ConfirmPickupPage
+              bag={bag}
+              journey={journey}
+              setJourney={setJourney}
+              stop={stop}
+              pickupName={pickupName}
+              setPickupName={setPickupName}
+              pickupPhone={pickupPhone}
+              setPickupPhone={setPickupPhone}
+              collectionPoint={collectionPoint}
+              setCollectionPoint={setCollectionPoint}
+              pickupNote={pickupNote}
+              setPickupNote={setPickupNote}
+              pickupConfirmed={pickupConfirmed}
+              setPickupConfirmed={setPickupConfirmed}
+              backTo={confirmPickupBackTo.current}
+              onContinue={() => {
+                paymentBackTo.current = PATHS.confirmPickup;
+                navigate(PATHS.paymentMethod);
+              }}
+            />
+          ) : paymentMethodPage ? (
+            <PaymentMethodPage
+              bag={bag}
+              paymentMethod={paymentMethod}
+              setPaymentMethod={setPaymentMethod}
+              upiId={upiId}
+              setUpiId={setUpiId}
+              backTo={paymentBackTo.current}
+              onPay={() => navigate(
+                window.matchMedia("(max-width: 767px)").matches ? PATHS.paymentStatus : PATHS.invoice,
+              )}
+            />
+          ) : paymentStatusPage ? (
+            window.matchMedia("(max-width: 767px)").matches ? (
+              <MobilePaymentStatusPage
+                bag={bag}
+                journey={journey}
+                stop={stop}
+                onComplete={() => navigate(PATHS.orderSummary)}
+              />
+            ) : (
+              <PreparingInvoicePage onComplete={() => navigate(PATHS.orderSummary)} bag={bag} />
+            )
+          ) : invoicePage ? (
+            window.matchMedia("(max-width: 767px)").matches ? (
+              <MobileOrderInvoice
+                bag={bag}
+                journey={journey}
+                stop={stop}
+                paymentMethod={paymentMethod}
+              />
+            ) : (
+              <PreparingInvoicePage onComplete={() => navigate(PATHS.orderSummary)} bag={bag} />
+            )
+          ) : orderSummaryPage ? (
+            <OrderSummaryPage
+              bag={bag}
+              journey={journey}
+              stop={stop}
+              pickupName={pickupName}
+              pickupPhone={pickupPhone}
+              paymentMethod={paymentMethod}
+            />
+          ) : trackOrderPage ? (
+            <TrackOrderPage bag={bag} stop={stop} journey={journey} />
           ) : (
             <CookListing journey={journey} stop={stop} onChangeStop={() => setJourneyPanel("pickup")} />
           )}
         </>
       )}
       <CookFooter />
-      {path === PATHS.cooks ? <MobileTabBar /> : null}
+      {path === PATHS.cooks || profilePage || myOrdersPage || trackOrderPage ? (
+        <MobileTabBar active={profilePage ? "profile" : myOrdersPage ? "orders" : trackOrderPage ? "track" : "home"} />
+      ) : null}
     </div>
   );
 }
@@ -139,11 +341,17 @@ function CookHeader({
   showBack = false,
   listingCart = false,
   backTo = PATHS.cooks,
+  hideCart = false,
+  profilePage = false,
+  hideProfileOnMobile = false,
 }: {
   bagCount: number;
   showBack?: boolean;
   listingCart?: boolean;
   backTo?: string;
+  hideCart?: boolean;
+  profilePage?: boolean;
+  hideProfileOnMobile?: boolean;
 }) {
   return (
     <header className="ck-header">
@@ -167,16 +375,29 @@ function CookHeader({
         </nav>
       </div>
       <div className="ck-header-tools">
-        <span
-          className={listingCart ? "ck-cart ck-cart--mobile-only" : "ck-cart"}
-          aria-label={bagCount > 0 ? `${bagCount} items in meal bag` : "Meal bag"}
+        {!hideCart ? (
+          <button
+            className={listingCart ? "ck-cart ck-cart--mobile-only" : "ck-cart"}
+            type="button"
+            aria-label={bagCount > 0 ? `${bagCount} items in meal bag` : "Meal bag"}
+            onClick={() => {
+              if (window.matchMedia("(max-width: 767px)").matches) navigate(PATHS.cart);
+            }}
+            style={{ border: 0, padding: 0, background: "transparent", cursor: "default" }}
+          >
+            <CartIcon />
+            {bagCount > 0 ? <em>{bagCount}</em> : null}
+          </button>
+        ) : null}
+        <button
+          className={`ck-avatar${profilePage ? " is-active" : ""}${hideProfileOnMobile ? " ck-avatar--mobile-hidden" : ""}`}
+          type="button"
+          aria-label="My profile"
+          aria-current={profilePage ? "page" : undefined}
+          onClick={() => navigate(PATHS.profile)}
         >
-          <CartIcon />
-          {bagCount > 0 ? <em>{bagCount}</em> : null}
-        </span>
-        <span className="ck-avatar" aria-hidden="true">
           <ProfileIcon />
-        </span>
+        </button>
       </div>
     </header>
   );
@@ -672,12 +893,14 @@ function LakshmiMenu({
   setQty,
   journey,
   stop,
+  onContinue,
 }: {
   bag: BagLine[];
   addMeal: (meal: Meal) => void;
   setQty: (id: string, qty: number) => void;
   journey: JourneyChoice;
   stop: ReturnType<typeof pickupMeta>;
+  onContinue: () => void;
 }) {
   const [tab, setTab] = useState<MenuTab>("all");
   const [query, setQuery] = useState("");
@@ -804,6 +1027,10 @@ function LakshmiMenu({
       <div className="ck-menu-layout">
         <div>
           <div className="ck-menu-tools">
+            <label className="ck-search">
+              <SearchIcon />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this kitchen’s menu" />
+            </label>
             <div className="ck-tabs">
               <Chip className="ck-chip--desk" pressed={tab === "all"} onClick={() => setTab("all")}>
                 All
@@ -827,10 +1054,6 @@ function LakshmiMenu({
                 {`Snacks ( ${snackCount} )`}
               </Chip>
             </div>
-            <label className="ck-search">
-              <SearchIcon />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this kitchen’s menu" />
-            </label>
           </div>
 
           {favourites.length ? (
@@ -893,7 +1116,7 @@ function LakshmiMenu({
               <strong>{formatRupees(subtotal)}</strong>
             </p>
             <p className="ck-bag-hint">Taxes and pickup charges at checkout.</p>
-            <button className="ck-continue" type="button" disabled={bag.length === 0}>
+            <button className="ck-continue" type="button" disabled={bag.length === 0} onClick={onContinue}>
               Continue
               <ArrowIcon />
             </button>
@@ -953,10 +1176,1281 @@ function LakshmiMenu({
             <strong>{formatRupees(subtotal)}</strong>
           </span>
         </div>
-        <button className="ck-m-cartbar-go" type="button" disabled={bag.length === 0} aria-label="Continue">
+        <button className="ck-m-cartbar-go" type="button" disabled={bag.length === 0} aria-label="Continue" onClick={onContinue}>
           <ArrowIcon />
         </button>
       </div>
+    </main>
+  );
+}
+
+function MealBagPage({
+  bag,
+  addMeal,
+  setQty,
+  journey,
+  stop,
+  kitchenNote,
+  setKitchenNote,
+  onContinue,
+}: {
+  bag: BagLine[];
+  addMeal: (meal: Meal) => void;
+  setQty: (id: string, qty: number) => void;
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  kitchenNote: string;
+  setKitchenNote: (note: string) => void;
+  onContinue: () => void;
+}) {
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const suggestedSnack = LAKSHMI_MEALS.find((meal) => meal.id === "murukku") ?? LAKSHMI_MEALS[0];
+  const journeyDate = `${journey.date.getDate()} ${MONTHS[journey.date.getMonth()].slice(0, 3)} ${journey.date.getFullYear()}`;
+
+  return (
+    <main className="ck-main ck-main--meal-bag">
+      <div className="ck-crumbs ck-meal-bag-crumbs">
+        <button type="button" onClick={() => navigate(PATHS.cooks)}>Home</button>
+        <span>/</span>
+        <button type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>Menu</button>
+        <span>/</span>
+        <strong>Meal bag</strong>
+        <button className="ck-back" type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>
+          <BackChevronIcon />
+          Back to menu
+        </button>
+      </div>
+
+      <div className="ck-meal-bag-heading">
+        <div>
+          <h1>Your meal bag</h1>
+          <p>A little home, packed for your journey.</p>
+        </div>
+        <ol className="ck-meal-bag-progress" aria-label="Checkout progress">
+          <li className="is-current"><span>1</span><strong>Bag</strong></li>
+          <li><span>2</span><strong>Review</strong></li>
+          <li><span>3</span><strong>Pickup</strong></li>
+          <li><span>4</span><strong>Payment</strong></li>
+        </ol>
+      </div>
+
+      <div className="ck-meal-bag-layout">
+        <div className="ck-meal-bag-main">
+          <section className="ck-meal-bag-items" aria-label="Items in your meal bag">
+            <div className="ck-meal-bag-kitchen">
+              <img src={cookLakshmiMenu} alt="" />
+              <div>
+                <small>From</small>
+                <h2>
+                  Lakshmi’s Kitchen
+                  <span><LeafIcon /> Vegetarian</span>
+                </h2>
+                <p>Everyday South Indian comfort food, made at home.</p>
+              </div>
+            </div>
+
+            {bag.length ? (
+              <ul className="ck-meal-bag-list">
+                {bag.map(({ meal, qty }) => (
+                  <li key={meal.id} className="ck-meal-bag-item">
+                    <img src={meal.photo} alt="" />
+                    <div className="ck-meal-bag-item-copy">
+                      <strong>{meal.name}</strong>
+                      <p>{meal.description}</p>
+                      <small>{meal.pack ?? `${qty} ${qty === 1 ? "serving" : "servings"}`}</small>
+                      <b>{formatRupees(meal.price)}</b>
+                    </div>
+                    <div className="ck-meal-bag-item-actions">
+                      <Stepper name={meal.name} qty={qty} onQty={(nextQty) => setQty(meal.id, nextQty)} />
+                      <button type="button" onClick={() => setQty(meal.id, 0)}>
+                        <TrashIcon />
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="ck-meal-bag-empty">Your meal bag is empty. Add something from Lakshmi’s Kitchen.</p>
+            )}
+
+            <button className="ck-meal-bag-add-more" type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>
+              <span>+</span>
+              Add more from this kitchen
+            </button>
+            <p className="ck-meal-bag-prepared">
+              <StoreIcon />
+              <span>Items in this bag are prepared by Lakshmi’s Kitchen.</span>
+            </p>
+          </section>
+
+          <section className="ck-meal-bag-note">
+            <div><NoteIcon /><strong>Note for the kitchen (optional)</strong></div>
+            <textarea
+              aria-label="Note for the kitchen"
+              placeholder="Any preparation requests?"
+              value={kitchenNote}
+              onChange={(event) => setKitchenNote(event.target.value)}
+            />
+            <small>Requests depend on what the cook can accommodate.</small>
+          </section>
+        </div>
+
+        <aside className="ck-meal-bag-side">
+          <section className="ck-meal-bag-summary">
+            <h2><BagIcon /> Order summary</h2>
+            <ul>
+              {bag.map(({ meal, qty }) => (
+                <li key={meal.id}>
+                  <img src={meal.photo} alt="" />
+                  <span>
+                    <strong>{meal.name}</strong>
+                    <small>{meal.pack ?? `${qty} ${qty === 1 ? "serving" : "servings"}`}</small>
+                  </span>
+                  <b>{formatRupees(meal.price * qty)}</b>
+                </li>
+              ))}
+            </ul>
+            <p className="ck-meal-bag-subtotal"><strong>Subtotal</strong><b>{formatRupees(subtotal)}</b></p>
+            <p className="ck-meal-bag-tax-note">
+              <span className="ck-meal-bag-tax-note-desktop">Final taxes and pickup charges shown on pickup confirmation.</span>
+              <span className="ck-meal-bag-tax-note-mobile">Final taxes and pickup charges shown on the review page.</span>
+            </p>
+            <button
+              className="ck-meal-bag-review"
+              type="button"
+              disabled={bag.length === 0}
+              onClick={onContinue}
+            >
+              <span className="ck-meal-bag-review-desktop">Continue</span>
+              <span className="ck-meal-bag-review-mobile">Review order</span>
+              <ArrowIcon />
+            </button>
+            <div className="ck-meal-bag-pickup">
+              <BannerPinIcon />
+              <p>
+                Pickup at <strong>{stop.name} bus stand</strong>
+                <span>{journeyDate} · {stop.time}</span>
+                <small>Collect near main entrance.</small>
+              </p>
+            </div>
+            <button className="ck-meal-bag-help" type="button"><HelpIcon />Need pickup help?</button>
+          </section>
+
+          <section className="ck-meal-bag-suggestion">
+            <h2><GiftIcon /> <span>Something for later?<small>Popular homemade snacks from this kitchen.</small></span></h2>
+            <div>
+              <img src={suggestedSnack.photo} alt="" />
+              <span>
+                <strong>{suggestedSnack.name}</strong>
+                <small>{suggestedSnack.pack}</small>
+                <b>{formatRupees(suggestedSnack.price)}</b>
+              </span>
+              {bag.some((line) => line.meal.id === suggestedSnack.id) ? (
+                <Stepper
+                  name={suggestedSnack.name}
+                  qty={bag.find((line) => line.meal.id === suggestedSnack.id)?.qty ?? 0}
+                  onQty={(qty) => setQty(suggestedSnack.id, qty)}
+                />
+              ) : (
+                <AddButton onClick={() => addMeal(suggestedSnack)} />
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function CheckoutProgress({ step }: { step: 2 | 3 | 4 }) {
+  const steps = ["Bag", "Review", "Pickup", "Payment"];
+  return (
+    <ol className="ck-checkout-progress" aria-label="Checkout progress">
+      {steps.map((label, index) => {
+        const number = index + 1;
+        const complete = number < step;
+        const current = number === step;
+        return (
+          <li key={label} className={complete ? "is-complete" : current ? "is-current" : undefined}>
+            <span>{complete ? "✓" : number}</span>
+            <strong>{label}</strong>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function CheckoutBreadcrumbs({ current, backTo, backLabel }: { current: string; backTo: string; backLabel: string }) {
+  return (
+    <div className="ck-crumbs ck-checkout-crumbs">
+      <button type="button" onClick={() => navigate(PATHS.cooks)}>Home</button>
+      <span>/</span>
+      <button type="button" onClick={() => navigate(PATHS.cooks)}>Home cooks</button>
+      <span>/</span>
+      <button type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>Lakshmi’s Kitchen</button>
+      <span>/</span>
+      <strong>{current}</strong>
+      <button className="ck-back" type="button" onClick={() => navigate(backTo)}>
+        <BackChevronIcon />
+        {backLabel}
+      </button>
+    </div>
+  );
+}
+
+function CheckoutMealRows({ bag }: { bag: BagLine[] }) {
+  return (
+    <ul className="ck-checkout-meals">
+      {bag.map(({ meal, qty }) => (
+        <li key={meal.id}>
+          <img src={meal.photo} alt="" />
+          <span>
+            <strong>{meal.name}</strong>
+            <small>{meal.description}</small>
+            <small>{meal.pack ?? `${qty} ${qty === 1 ? "serving" : "servings"}`}</small>
+          </span>
+          <b>× {qty}</b>
+          <strong>{formatRupees(meal.price * qty)}</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CheckoutTotals({ subtotal }: { subtotal: number }) {
+  return (
+    <div className="ck-checkout-totals">
+      <p><span>Items subtotal</span><strong>{formatRupees(subtotal)}</strong></p>
+      <p><span>Pickup service <HelpIcon /></span><strong>{formatRupees(15)}</strong></p>
+      <p><span>Taxes</span><strong>{formatRupees(8)}</strong></p>
+      <p className="ck-checkout-total"><span>Total</span><strong>{formatRupees(subtotal + 23)}</strong></p>
+    </div>
+  );
+}
+
+function ReviewOrderPage({
+  bag,
+  journey,
+  stop,
+  kitchenNote,
+  onContinue,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  kitchenNote: string;
+  onContinue: () => void;
+}) {
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const date = `${journey.date.getDate()} ${MONTHS[journey.date.getMonth()].slice(0, 3)} ${journey.date.getFullYear()}`;
+
+  return (
+    <main className="ck-main ck-checkout-main">
+      <CheckoutBreadcrumbs current="Review your order" backTo={PATHS.mealBag} backLabel="Back to meal bag" />
+      <div className="ck-checkout-progress-row"><CheckoutProgress step={2} /></div>
+      <div className="ck-checkout-layout">
+        <div className="ck-checkout-primary">
+          <section className="ck-review-items">
+            <div className="ck-checkout-kitchen">
+              <img src={cookLakshmiMenu} alt="" />
+              <div>
+                <h1>From Lakshmi’s Kitchen <span><LeafIcon /> Vegetarian</span></h1>
+                <p>Everyday South Indian comfort food, made at home.</p>
+                <p className="ck-checkout-rating"><StarIcon /> <strong>4.8</strong> · 126 reviews</p>
+              </div>
+              <button type="button" onClick={() => navigate(PATHS.mealBag)}><PencilIcon /> Edit items</button>
+            </div>
+            <CheckoutMealRows bag={bag} />
+          </section>
+
+          <section className="ck-selected-pickup">
+            <h2><BannerPinIcon /> Your selected pickup</h2>
+            <div className="ck-selected-pickup-details">
+              <p><PinIcon /><span><strong>{stop.name} bus stand</strong><small>Collect near the main entrance.</small></span></p>
+              <p><CalendarIcon /><span><small>Date of journey</small><strong>{date}</strong></span></p>
+              <p><ClockIcon /><span><small>Arrival time</small><strong>{stop.time}</strong></span></p>
+            </div>
+            <p className="ck-selected-pickup-hint"><HelpIcon /> You’ll confirm your contact details in the next step.</p>
+          </section>
+
+          <section className="ck-review-note">
+            <NoteIcon />
+            <span><strong>Note for the kitchen</strong><small>{kitchenNote.trim() || "No special requests added."}</small></span>
+            <button type="button" onClick={() => navigate(PATHS.mealBag)}><PencilIcon /> Edit note</button>
+          </section>
+        </div>
+
+        <aside className="ck-checkout-sidebar">
+          <section className="ck-bill-details">
+            <h2>Bill details</h2>
+            <CheckoutTotals subtotal={subtotal} />
+            <small className="ck-bill-caption">Sample charges shown for this design.</small>
+            <button className="ck-checkout-primary-button" type="button" disabled={bag.length === 0} onClick={onContinue}>
+              Confirm pickup details <ArrowIcon />
+            </button>
+            <p className="ck-bill-after">Payment comes after pickup confirmation.</p>
+            <div className="ck-bus-hint"><BusIcon /><span><strong>Check your bus already stops at this pickup point.</strong><small>Aahaa does not arrange bus stops.</small></span></div>
+            <button className="ck-checkout-help" type="button"><HelpIcon />Help &amp; support</button>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function ConfirmPickupPage({
+  bag,
+  journey,
+  setJourney,
+  stop,
+  pickupName,
+  setPickupName,
+  pickupPhone,
+  setPickupPhone,
+  collectionPoint,
+  setCollectionPoint,
+  pickupNote,
+  setPickupNote,
+  pickupConfirmed,
+  setPickupConfirmed,
+  backTo,
+  onContinue,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  setJourney: Dispatch<SetStateAction<JourneyChoice>>;
+  stop: ReturnType<typeof pickupMeta>;
+  pickupName: string;
+  setPickupName: (name: string) => void;
+  pickupPhone: string;
+  setPickupPhone: (phone: string) => void;
+  collectionPoint: string;
+  setCollectionPoint: (point: string) => void;
+  pickupNote: string;
+  setPickupNote: (note: string) => void;
+  pickupConfirmed: boolean;
+  setPickupConfirmed: (confirmed: boolean) => void;
+  backTo: string;
+  onContinue: () => void;
+}) {
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const dateValue = `${journey.date.getFullYear()}-${String(journey.date.getMonth() + 1).padStart(2, "0")}-${String(journey.date.getDate()).padStart(2, "0")}`;
+
+  return (
+    <main className="ck-main ck-checkout-main">
+      <CheckoutBreadcrumbs current="Confirm pickup details" backTo={backTo} backLabel={backTo === PATHS.mealBag ? "Back to meal bag" : "Back to review order"} />
+      <div className="ck-checkout-title-row">
+        <div><h1>Confirm your pickup details</h1><p>Help us get your meal to the right person, at the right stop.</p></div>
+        <CheckoutProgress step={3} />
+      </div>
+      <div className="ck-checkout-layout ck-pickup-layout">
+        <div className="ck-checkout-primary">
+          <section className="ck-collecting-card">
+            <div className="ck-pickup-section-icon"><ProfileIcon /></div>
+            <div className="ck-pickup-section-content">
+              <h2>Who’s collecting?</h2>
+              <div className="ck-collecting-fields">
+                <label>Full name<input value={pickupName} onChange={(event) => setPickupName(event.target.value)} /></label>
+                <label>Mobile number<div className="ck-phone-field"><input type="tel" value={pickupPhone} onChange={(event) => setPickupPhone(event.target.value)} /><span><LockIcon /> Verified</span></div><small>Your delivery partner will contact this number.</small></label>
+              </div>
+            </div>
+          </section>
+
+          <section className="ck-pickup-where">
+            <div className="ck-pickup-section-icon"><BannerPinIcon /></div>
+            <div className="ck-pickup-section-content">
+              <div className="ck-pickup-where-grid">
+                <div>
+                  <h2>Where and when?</h2>
+                  <p>Your selected pickup stop and time.</p>
+                  <label>Pickup stop
+                    <select value={journey.pickup} onChange={(event) => setJourney((current) => ({ ...current, pickup: event.target.value }))}>
+                      {PICKUP_STOPS.map((pickup) => <option key={pickup.name} value={pickup.name}>{pickup.name} bus stand</option>)}
+                    </select>
+                  </label>
+                  <label>Collection point<input value={collectionPoint} onChange={(event) => setCollectionPoint(event.target.value)} /></label>
+                  <div className="ck-pickup-date-time">
+                    <label>Date of journey<input type="date" value={dateValue} onChange={(event) => {
+                      const [year, month, day] = event.target.value.split("-").map(Number);
+                      if (year && month && day) setJourney((current) => ({ ...current, date: new Date(year, month - 1, day) }));
+                    }} /></label>
+                    <label>Expected arrival time<select value={stop.time}><option>{stop.time}</option></select></label>
+                  </div>
+                  <p className="ck-pickup-point-hint"><LeafIcon /> Choose a pickup point where your bus already stops.</p>
+                </div>
+                <img className="ck-pickup-illustration" src={imgBusStop} alt="" />
+              </div>
+            </div>
+          </section>
+
+          <section className="ck-pickup-note-card">
+            <div className="ck-pickup-section-icon"><NoteIcon /></div>
+            <div className="ck-pickup-section-content">
+              <h2>Pickup note (optional)</h2>
+              <textarea value={pickupNote} onChange={(event) => setPickupNote(event.target.value)} placeholder="Add a landmark or a detail to help us find you." />
+              <small><HelpIcon /> Avoid sharing sensitive information.</small>
+            </div>
+          </section>
+          <label className="ck-pickup-confirm"><input type="checkbox" checked={pickupConfirmed} onChange={(event) => setPickupConfirmed(event.target.checked)} /> I’ve confirmed that my bus stops at this pickup point.</label>
+        </div>
+
+        <aside className="ck-checkout-sidebar">
+          <section className="ck-pickup-summary">
+            <h2><BagIcon /> <span>Order summary<small>From Lakshmi’s Kitchen</small></span></h2>
+            <CheckoutMealRows bag={bag} />
+            <CheckoutTotals subtotal={subtotal} />
+            <button className="ck-checkout-primary-button" type="button" disabled={bag.length === 0} onClick={onContinue}>
+              Continue to payment <ArrowIcon />
+            </button>
+            <p className="ck-bill-after">Review these details before continuing.</p>
+          </section>
+          <section className="ck-pickup-bus-hint"><BusIcon /><span><strong>Bus running late?</strong><small>You can report a delay from your order page.</small><button className="ck-checkout-help" type="button"><HelpIcon />Help &amp; support</button></span></section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function PaymentMethodPage({
+  bag,
+  paymentMethod,
+  setPaymentMethod,
+  upiId,
+  setUpiId,
+  backTo,
+  onPay,
+}: {
+  bag: BagLine[];
+  paymentMethod: PaymentMethod;
+  setPaymentMethod: (method: PaymentMethod) => void;
+  upiId: string;
+  setUpiId: (upiId: string) => void;
+  backTo: string;
+  onPay: () => void;
+}) {
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const methods: { id: PaymentMethod; name: string; detail: string; logo: string }[] = [
+    { id: "google-pay", name: "Google Pay", detail: "Pay using GPay", logo: "G" },
+    { id: "phonepe", name: "PhonePe", detail: "Pay using PhonePe", logo: "पे" },
+    { id: "paytm", name: "paytm", detail: "Pay using Paytm", logo: "paytm" },
+    { id: "other-upi", name: "Other UPI apps", detail: "Pay using any other UPI app", logo: "UPI" },
+  ];
+
+  return (
+    <main className="ck-main ck-checkout-main ck-payment-main">
+      <MobilePaymentView
+        bag={bag}
+        methods={methods}
+        paymentMethod={paymentMethod}
+        setPaymentMethod={setPaymentMethod}
+        onPay={onPay}
+      />
+      <CheckoutBreadcrumbs
+        current="Payment"
+        backTo={backTo}
+        backLabel={backTo === PATHS.cart ? "Back to cart" : "Back to pickup details"}
+      />
+      <div className="ck-checkout-title-row ck-payment-title-row">
+        <div><h1>Choose payment method</h1><p>Pay securely to confirm your homely meal.</p></div>
+        <CheckoutProgress step={4} />
+      </div>
+      <div className="ck-checkout-layout ck-payment-layout">
+        <section className="ck-payment-options">
+          <div className="ck-payment-section-title">
+            <span><ShieldIcon /></span>
+            <h2>UPI</h2>
+            <small><LockIcon /> Secure payment</small>
+          </div>
+          <div className="ck-payment-method-list" role="radiogroup" aria-label="UPI payment method">
+            {methods.map((method) => (
+              <button
+                key={method.id}
+                className={`ck-payment-method${paymentMethod === method.id ? " is-selected" : ""}`}
+                type="button"
+                role="radio"
+                aria-checked={paymentMethod === method.id}
+                onClick={() => setPaymentMethod(method.id)}
+              >
+                <span className="ck-payment-radio" />
+                <span className={`ck-payment-logo ck-payment-logo--${method.id}`}>{method.logo}</span>
+                <span className="ck-payment-method-copy"><strong>{method.name}</strong><small>{method.detail}</small></span>
+              </button>
+            ))}
+          </div>
+          <section className="ck-payment-any-upi">
+            <h3><span><StepArrowIcon /></span>Pay by any UPI app</h3>
+            <div className="ck-payment-upi-input">
+              <input value={upiId} onChange={(event) => setUpiId(event.target.value)} placeholder="Enter UPI ID (e.g. name@okaxis)" aria-label="UPI ID" />
+              <button type="button">Verify</button>
+            </div>
+            <button type="button" className="ck-payment-scan">
+              <span className="ck-payment-qr" aria-hidden="true"><QrIcon /></span>
+              <span><strong>Scan QR code</strong><small>Scan with any UPI app</small></span>
+              <span className="ck-payment-chevron">›</span>
+            </button>
+          </section>
+          <p className="ck-payment-secure"><LockIcon /><span><strong>100% secure payments.</strong> Your UPI PIN is never shared with Aahaa.</span></p>
+        </section>
+
+        <aside className="ck-checkout-sidebar ck-payment-sidebar">
+          <section className="ck-pickup-summary ck-payment-summary">
+            <h2><BagIcon /><span>Order summary<small>From Lakshmi’s Kitchen</small></span></h2>
+            <CheckoutMealRows bag={bag} />
+            <CheckoutTotals subtotal={subtotal} />
+            <button className="ck-checkout-primary-button" type="button" disabled={bag.length === 0} onClick={onPay}>
+              Pay {formatRupees(subtotal + 23)} <ArrowIcon />
+            </button>
+            <p className="ck-bill-after">You’ll be redirected to your UPI app to complete payment.</p>
+          </section>
+          <section className="ck-payment-help">
+            <span><HeadsetIcon /></span>
+            <div><strong>Need help with payment?</strong><small>Our support team is here to help you with any payment issues.</small><button className="ck-checkout-help" type="button"><HelpIcon />Help &amp; support</button></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function MobilePaymentView({
+  bag,
+  methods,
+  paymentMethod,
+  setPaymentMethod,
+  onPay,
+}: {
+  bag: BagLine[];
+  methods: { id: PaymentMethod; name: string; detail: string; logo: string }[];
+  paymentMethod: PaymentMethod;
+  setPaymentMethod: (method: PaymentMethod) => void;
+  onPay: () => void;
+}) {
+  const [paymentType, setPaymentType] = useState<"upi" | "card" | "net-banking">("upi");
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const itemCount = bag.reduce((sum, line) => sum + line.qty, 0);
+  const selectedMethod = methods.find((method) => method.id === paymentMethod);
+
+  return (
+    <div className="ck-mobile-payment">
+      <div className="ck-mobile-payment-heading">
+        <h1>Payment</h1>
+        <p>Choose a payment method to complete your order</p>
+      </div>
+      <section className="ck-mobile-payment-order" aria-label="Order summary">
+        <img src={paymentKitchen} alt="" />
+        <div className="ck-mobile-payment-order-copy">
+          <strong>From Lakshmi’s Kitchen</strong>
+          <span className="ck-mobile-payment-veg"><LeafIcon /> Vegetarian</span>
+          <small>{itemCount} items - {bag.map(({ meal }) => meal.name).join(", ")}</small>
+        </div>
+        <strong className="ck-mobile-payment-price">{formatCartAmountForCheckout(subtotal + 55.3)}</strong>
+      </section>
+
+      <section className="ck-mobile-payment-section">
+        <h2>UPI</h2>
+        <p>Pay quickly using any UPI app</p>
+        <div className="ck-mobile-payment-options">
+          {methods.filter((method) => method.id !== "other-upi").map((method) => (
+            <button
+              key={method.id}
+              className={`ck-mobile-payment-upi${paymentType === "upi" && paymentMethod === method.id ? " is-selected" : ""}`}
+              type="button"
+              aria-pressed={paymentType === "upi" && paymentMethod === method.id}
+              onClick={() => {
+                setPaymentType("upi");
+                setPaymentMethod(method.id);
+              }}
+            >
+              <span className={`ck-payment-logo ck-payment-logo--${method.id}`}>
+                <PaymentMethodLogo id={method.id} fallback={method.logo} />
+              </span>
+              <strong>{method.name}</strong>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="ck-mobile-payment-section">
+        <h2>Cards</h2>
+        <p>Pay using your credit or debit cards</p>
+        <button
+          className={`ck-mobile-payment-choice${paymentType === "card" ? " is-selected" : ""}`}
+          type="button"
+          aria-pressed={paymentType === "card"}
+          onClick={() => setPaymentType("card")}
+        >
+          <span className="ck-mobile-payment-choice-icon"><CreditCardIcon /></span>
+          <span><strong>Add credit or debit card</strong><small>Visa, Mastercard, RuPay and more</small></span>
+          <PaymentChevronIcon />
+        </button>
+      </section>
+
+      <section className="ck-mobile-payment-section">
+        <h2>Net Banking</h2>
+        <p>Pay using your wallet balance</p>
+        <button
+          className={`ck-mobile-payment-choice${paymentType === "net-banking" ? " is-selected" : ""}`}
+          type="button"
+          aria-pressed={paymentType === "net-banking"}
+          onClick={() => setPaymentType("net-banking")}
+        >
+          <span className="ck-mobile-payment-choice-icon"><BankOutlineIcon /></span>
+          <span><strong>Net Banking</strong><small>All major banks</small></span>
+          <PaymentChevronIcon />
+        </button>
+      </section>
+
+      <footer className="ck-mobile-payment-footer">
+        <div>
+          <strong>{formatRupees(subtotal)}</strong>
+          <span>{itemCount} items</span>
+          <small>
+            <span className={`ck-payment-logo ck-payment-logo--${selectedMethod?.id ?? "google-pay"}`}>
+              <PaymentMethodLogo id={selectedMethod?.id ?? "google-pay"} fallback={selectedMethod?.logo ?? "G"} />
+            </span>
+            {paymentType === "upi" ? selectedMethod?.name ?? "Google Pay" : paymentType === "card" ? "Cards" : "Net Banking"}
+          </small>
+        </div>
+        <button type="button" onClick={onPay}>Proceed to pay <ArrowIcon /></button>
+      </footer>
+    </div>
+  );
+}
+
+function PaymentMethodLogo({ id, fallback }: { id: PaymentMethod; fallback: string }) {
+  const source = id === "google-pay"
+    ? paymentGooglePayLogo
+    : id === "phonepe"
+      ? paymentPhonePeLogo
+      : id === "paytm"
+        ? paymentPaytmLogo
+        : null;
+
+  return source ? <img src={source} alt="" /> : fallback;
+}
+
+function MobileStatusBar() {
+  return (
+    <div className="ck-mobile-status-bar" aria-hidden="true">
+      <span>9:41</span>
+      <span className="ck-mobile-status-icons">
+        <svg viewBox="0 0 18 12"><path d="M1 11V8.5h2V11zm4 0V6h2v5zm4 0V3.5h2V11zm4 0V1h2v10z" /></svg>
+        <svg viewBox="0 0 16 12"><path d="M1 4.5a10 10 0 0 1 14 0L8 11z" /></svg>
+        <svg viewBox="0 0 25 13"><rect x=".5" y="1" width="21" height="11" rx="2" /><path d="M23 4v5" /><rect x="2.5" y="3" width="16" height="7" rx="1" /></svg>
+      </span>
+    </div>
+  );
+}
+
+function MobilePaymentStatusPage({
+  bag,
+  journey,
+  stop,
+  onComplete,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  onComplete: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(onComplete, 3500);
+    return () => window.clearTimeout(timer);
+  }, [onComplete]);
+
+  const itemCount = bag.reduce((sum, line) => sum + line.qty, 0);
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const total = subtotal + 55.3;
+  const date = journey.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+  return (
+    <main className="ck-mobile-payment-status" aria-label="Payment status">
+      <header className="ck-mobile-payment-status-header">
+        <button type="button" aria-label="Back to payment methods" onClick={() => navigate(PATHS.paymentMethod)}>
+          <BackChevronIcon />
+        </button>
+        <button className="ck-wordmark" type="button" aria-label="aahaa" onClick={() => navigate(PATHS.home)}>
+          a<span className="ck-mark-aa">ahaa<SmileIcon /></span>
+        </button>
+      </header>
+      <h1>Payment Status</h1>
+
+      <section className="ck-payment-status-receipt" aria-label="Order receipt">
+        <div className="ck-payment-status-printer" />
+        <article className="ck-payment-status-paper">
+          <header className="ck-payment-status-paper-header">
+            <strong>aahaa<span>⌣</span></strong>
+            <span>Trip Food Order<small>#AAH20261018-001</small><small>{date}, 01:02 PM</small></span>
+          </header>
+
+          <section className="ck-payment-status-kitchen">
+            <img src={imgKitchenLakshmi} alt="" />
+            <span>
+              <strong>Lakshmi’s Kitchen</strong>
+              <span className="ck-mobile-payment-veg"><LeafIcon /> Vegetarian</span>
+              <small>Everyday South Indian comfort food</small>
+            </span>
+          </section>
+
+          <div className="ck-payment-status-pickup">
+            <span><PinIcon /><small>Pickup point</small><strong>{stop.name} Bus Stand</strong></span>
+            <span><ClockIcon /><small>Pickup time</small><strong>{stop.time}</strong></span>
+          </div>
+
+          <div className="ck-payment-status-table">
+            <div className="ck-payment-status-table-head"><span>Item</span><span>Qty</span><span>Amount</span></div>
+            {bag.map(({ meal, qty }) => (
+              <div className="ck-payment-status-item" key={meal.id}>
+                <img src={meal.photo} alt="" />
+                <span><strong>{meal.name}</strong><small>{meal.description}</small></span>
+                <span>{qty}</span>
+                <strong>{formatRupees(meal.price * qty)}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="ck-payment-status-totals">
+            <p><span>Items total ({itemCount} items)</span><strong>{formatRupees(subtotal)}</strong></p>
+            <p><span>Delivery fee</span><strong>{formatRupees(30)}</strong></p>
+            <p><span>GST &amp; other charges</span><strong>{formatCartAmountForCheckout(25.3)}</strong></p>
+            <p className="ck-payment-status-paid"><strong>Total paid</strong><strong>{formatCartAmountForCheckout(total)}</strong></p>
+          </div>
+        </article>
+      </section>
+
+      <section className="ck-payment-status-progress" aria-live="polite">
+        <h2>Payment Status</h2>
+        <ol>
+          <li className="is-complete"><span><CheckIcon /></span><strong>Payment<br />received</strong><small>01:02 PM</small></li>
+          <li className="is-complete"><span><CheckIcon /></span><strong>Order<br />confirmed</strong><small>01:02 PM</small></li>
+          <li className="is-current"><span>↻</span><strong>Generating<br />your bill...</strong></li>
+          <li><span><NoteIcon /></span><strong>Bill<br />ready</strong></li>
+        </ol>
+        <p>Please keep this screen open while we prepare your invoice</p>
+      </section>
+    </main>
+  );
+}
+
+function PreparingInvoicePage({ bag, onComplete }: { bag: BagLine[]; onComplete: () => void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(onComplete, 3500);
+    return () => window.clearTimeout(timer);
+  }, [onComplete]);
+
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const total = subtotal + 23;
+
+  return (
+    <main className="ck-main ck-invoice-main">
+      <header className="ck-invoice-heading">
+        <h1>Preparing your invoice</h1>
+        <p>Your payment is successful. Please wait while we generate your bill.</p>
+      </header>
+      <section className="ck-invoice-card" aria-live="polite">
+        <div className="ck-invoice-printer">
+          <div className="ck-printer-slot" />
+          <article className="ck-invoice-paper">
+            <strong className="ck-invoice-logo">aahaa</strong>
+            <b>Aahaa Order Invoice</b>
+            <small>Your food, fresh and on time</small>
+            <p><span>Order ID</span><strong>#AHA-728361</strong></p>
+            <div className="ck-invoice-table-head"><span>Item</span><span>Qty</span><span>Price</span></div>
+            {bag.map(({ meal, qty }) => (
+              <div className="ck-invoice-line" key={meal.id}>
+                <img src={meal.photo} alt="" />
+                <span><strong>{meal.name}</strong><small>{meal.pack ?? `${qty} serving${qty === 1 ? "" : "s"}`}</small></span>
+                <span>{qty}</span>
+                <strong>{formatRupees(meal.price * qty)}</strong>
+              </div>
+            ))}
+            <div className="ck-invoice-charges">
+              <p><span>Subtotal</span><strong>{formatRupees(subtotal)}</strong></p>
+              <p><span>Pickup service</span><strong>{formatRupees(15)}</strong></p>
+              <p><span>Taxes</span><strong>{formatRupees(8)}</strong></p>
+            </div>
+            <p className="ck-invoice-total"><strong>Total</strong><strong>{formatRupees(total)}</strong></p>
+          </article>
+        </div>
+        <div className="ck-invoice-generating">
+          <span className="ck-invoice-spinner" />
+          <span><strong>Generating bill...</strong><small>This may take a few seconds.</small></span>
+        </div>
+      </section>
+      <ol className="ck-invoice-progress" aria-label="Order progress">
+        <li className="is-complete"><span><CheckIcon /></span><strong>Payment received</strong><small>01:24 PM</small></li>
+        <li className="is-current"><span><NoteIcon /></span><strong>Generating invoice</strong><small>Just a moment...</small></li>
+        <li><span><BoxIcon /></span><strong>Confirming order</strong><small>—</small></li>
+        <li><span><DeliveryIcon /></span><strong>Order confirmed</strong><small>—</small></li>
+      </ol>
+      <p className="ck-invoice-warning"><AlertIcon /><span><strong>Please don't refresh or close this page.</strong><small>We're finalizing your invoice and order details.</small></span></p>
+    </main>
+  );
+}
+
+function OrderSummaryPage({
+  bag,
+  journey,
+  stop,
+  pickupName,
+  pickupPhone,
+  paymentMethod,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  pickupName: string;
+  pickupPhone: string;
+  paymentMethod: PaymentMethod;
+}) {
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const total = subtotal + 23;
+  const date = formatBarDate(journey.date);
+  const paymentLabel = paymentMethod === "google-pay"
+    ? "Google Pay"
+    : paymentMethod === "phonepe"
+      ? "PhonePe"
+      : paymentMethod === "paytm"
+        ? "Paytm"
+        : "UPI";
+
+  return (
+    <main className="ck-main ck-order-summary-main">
+      <MobileOrderComplete
+        bag={bag}
+        stop={stop}
+        subtotal={subtotal}
+        total={subtotal + 55.3}
+        date={date}
+      />
+      <header className="ck-order-success-heading">
+        <span><CheckIcon /></span>
+        <div><h1>Your order summary</h1><p>Payment successful! Your order has been confirmed.</p></div>
+      </header>
+      <div className="ck-order-summary-layout">
+        <section className="ck-order-invoice-card">
+          <header className="ck-order-invoice-header">
+            <NoteIcon />
+            <span><strong>Aahaa Order Invoice</strong><small>Your food, fresh and on time</small></span>
+            <span className="ck-order-invoice-id"><small>Order ID</small><strong>#AHA-728361</strong></span>
+          </header>
+          <div className="ck-order-invoice-table">
+            <div className="ck-order-invoice-table-head"><span>Item</span><span>Qty</span><span>Price</span></div>
+            {bag.map(({ meal, qty }) => (
+              <div className="ck-order-invoice-line" key={meal.id}>
+                <img src={meal.photo} alt="" />
+                <span><strong>{meal.name}</strong><small>{meal.pack ?? `${qty} serving${qty === 1 ? "" : "s"}`}</small></span>
+                <span>{qty}</span>
+                <strong>{formatRupees(meal.price * qty)}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="ck-order-invoice-totals">
+            <p><span>Subtotal</span><strong>{formatRupees(subtotal)}</strong></p>
+            <p><span>Pickup service <HelpIcon /></span><strong>{formatRupees(15)}</strong></p>
+            <p><span>Taxes <HelpIcon /></span><strong>{formatRupees(8)}</strong></p>
+            <p className="ck-order-invoice-total"><strong>Total</strong><strong>{formatRupees(total)}</strong></p>
+          </div>
+          <div className="ck-order-payment">
+            <span className="ck-order-upi-logo">UPI</span>
+            <span><small>Payment method</small><strong>{paymentLabel}</strong></span>
+            <strong className="ck-order-paid"><CheckIcon /> Paid</strong>
+          </div>
+          <section className="ck-order-status">
+            <h2>Order status</h2>
+            <ol>
+              <li className="is-complete"><span><CheckIcon /></span><strong>Order confirmed</strong><small>12:42 PM</small><p>Your order has been received.</p></li>
+              <li className="is-current"><span><NoteIcon /></span><strong>Preparing</strong><small>01:00 PM</small><p>Home cook is preparing your food.</p></li>
+              <li><span><BoxIcon /></span><strong>Packed &amp; ready</strong><small>—</small><p>Your food will be packed shortly.</p></li>
+              <li><span><BusIcon /></span><strong>Pickup at {stop.name} bus stand</strong><small>—</small><p>Delivery partner will pick up at your selected stop.</p></li>
+            </ol>
+          </section>
+          <div className="ck-order-actions">
+            <button type="button" className="ck-order-download" onClick={() => window.print()}><DownloadIcon />Download invoice</button>
+            <button type="button" className="ck-order-track-button" onClick={() => navigate(PATHS.trackOrder)}><PinIcon />Track your order</button>
+          </div>
+        </section>
+
+        <aside className="ck-order-summary-sidebar">
+          <section className="ck-order-pickup-card">
+            <h2><NoteIcon />Order &amp; Pickup Summary</h2>
+            <OrderDetail icon={<ProfileIcon />} label="Collector name" value={pickupName} />
+            <OrderDetail icon={<PhoneIcon />} label="Mobile number" value={pickupPhone} />
+            <OrderDetail
+              icon={<PinIcon />}
+              label="Pickup location"
+              value={`${stop.name} bus stand`}
+              action={<button type="button" onClick={() => navigate(PATHS.confirmPickup)}>Change</button>}
+            />
+            <OrderDetail icon={<ClockIcon />} label="Pickup time" value={stop.time} />
+            <OrderDetail icon={<BusIcon />} label="Journey" value={`${journey.from} → ${journey.to}`} />
+            <OrderDetail icon={<CalendarIcon />} label="Date" value={date} />
+          </section>
+          <section className="ck-order-help-card">
+            <span><HeadsetIcon /></span>
+            <div><strong>Need help with your order?</strong><small>Our support team is here to help you with any order issues.</small><button className="ck-checkout-help" type="button"><HelpIcon />Help &amp; support</button></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function MobileOrderComplete({
+  bag,
+  stop,
+  subtotal,
+  total,
+  date,
+}: {
+  bag: BagLine[];
+  stop: ReturnType<typeof pickupMeta>;
+  subtotal: number;
+  total: number;
+  date: string;
+}) {
+  const itemCount = bag.reduce((sum, line) => sum + line.qty, 0);
+  const journeyDate = `${date.split("-").join(" ")}, 01:02 PM`;
+
+  return (
+    <div className="ck-mobile-order-complete">
+      <header className="ck-mobile-complete-header">
+        <button type="button" aria-label="Back to home cooks" onClick={() => navigate(PATHS.cooks)}>
+          <BackChevronIcon />
+        </button>
+        <span className="ck-wordmark">a<span className="ck-mark-aa">ahaa<SmileIcon /></span></span>
+      </header>
+
+      <section className="ck-mobile-complete-success">
+        <img src={paymentCompleteSuccess} alt="" />
+        <div>
+          <h1>Payment Completed!</h1>
+          <p>Your order has been confirmed.</p>
+          <small>Transaction ID: AAH20737389383 <NoteIcon /></small>
+        </div>
+        <img src={paymentCompleteInvoice} alt="" />
+      </section>
+
+      <section className="ck-mobile-complete-card" aria-label="Order details">
+        <div className="ck-mobile-complete-kitchen">
+          <img src={paymentKitchen} alt="" />
+          <div>
+            <strong>From Lakshmi’s Kitchen</strong>
+            <span className="ck-mobile-payment-veg"><LeafIcon /> Vegetarian</span>
+            <small>{itemCount} items - {bag.map(({ meal }) => meal.name).join(", ")}</small>
+          </div>
+        </div>
+        <div className="ck-mobile-complete-meta">
+          <small>Order ID: AAH20346389383-001</small>
+          <small>{journeyDate}</small>
+        </div>
+        <div className="ck-mobile-complete-pickup">
+          <span><PinIcon /><small>Pickup point</small><strong>{stop.name}</strong></span>
+          <span><ClockIcon /><small>Pickup time</small><strong>{stop.time}</strong></span>
+        </div>
+        <div className="ck-mobile-complete-items">
+          <div className="ck-mobile-complete-table-head"><span>Item</span><span>Qty</span><span>Amount</span></div>
+          {bag.map(({ meal, qty }) => (
+            <div className="ck-mobile-complete-item" key={meal.id}>
+              <img src={meal.photo} alt="" />
+              <span><strong>{meal.name}</strong><small>{meal.description}</small></span>
+              <span>{qty}</span>
+              <strong>{formatRupees(meal.price * qty)}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="ck-mobile-complete-totals">
+          <p><span>Items total ({itemCount} items)</span><strong>{formatRupees(subtotal)}</strong></p>
+          <p><span>Delivery fee</span><strong>{formatRupees(30)}</strong></p>
+          <p><span>GST &amp; other charges</span><strong>{formatCartAmountForCheckout(25.3)}</strong></p>
+          <p className="ck-mobile-complete-paid"><strong>Total paid</strong><strong>{formatCartAmountForCheckout(total)}</strong></p>
+        </div>
+      </section>
+
+      <section className="ck-mobile-complete-status">
+        <h2>Order status</h2>
+        <ol>
+          <li className="is-complete"><span><CheckIcon /></span><strong>Payment<br />confirmed</strong></li>
+          <li className="is-current"><span><NoteIcon /></span><strong>Preparing<br />order</strong></li>
+          <li><span><BoxIcon /></span><strong>Ready for<br />pickup</strong></li>
+          <li><span><DeliveryIcon /></span><strong>Order<br />completed</strong></li>
+        </ol>
+      </section>
+
+      <button className="ck-mobile-complete-track" type="button" onClick={() => navigate(PATHS.trackOrder)}>
+        <span><PinIcon /></span>
+        <span><strong>Track your order</strong><small>Get real-time updates on your order status</small></span>
+        <PaymentChevronIcon />
+      </button>
+
+      <footer className="ck-mobile-complete-actions">
+        <button type="button" onClick={() => navigate(PATHS.invoice)}><DownloadIcon />View invoice</button>
+        <button type="button" onClick={() => navigate(PATHS.helpSupport)}><HelpIcon />Need help?</button>
+      </footer>
+    </div>
+  );
+}
+
+function formatCartAmountForCheckout(value: number) {
+  return Number.isInteger(value) ? formatRupees(value) : `₹${value.toFixed(2)}`;
+}
+
+function MobileOrderInvoice({
+  bag,
+  journey,
+  stop,
+  paymentMethod,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  paymentMethod: PaymentMethod;
+}) {
+  const [shareMessage, setShareMessage] = useState("");
+  const subtotal = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0);
+  const itemCount = bag.reduce((sum, line) => sum + line.qty, 0);
+  const total = subtotal + 55.3;
+  const paymentLabel = paymentMethod === "google-pay"
+    ? "Google Pay"
+    : paymentMethod === "phonepe"
+      ? "PhonePe"
+      : paymentMethod === "paytm"
+        ? "Paytm"
+        : "UPI";
+  const invoiceDate = journey.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+  async function shareInvoice() {
+    if (!navigator.share) {
+      setShareMessage("Sharing isn't available on this device.");
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: "Aahaa Order Invoice",
+        text: "Your Aahaa order invoice (#AAH20261018-001).",
+      });
+      setShareMessage("");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareMessage("Unable to share the invoice. Please try again.");
+    }
+  }
+
+  return (
+    <main className="ck-mobile-invoice">
+      <header className="ck-mobile-invoice-header">
+        <button type="button" aria-label="Back to order summary" onClick={() => navigate(PATHS.orderSummary)}>
+          <BackChevronIcon />
+        </button>
+        <span className="ck-wordmark">a<span className="ck-mark-aa">ahaa<SmileIcon /></span></span>
+        <h1>Order Invoice</h1>
+        <button type="button" aria-label="Share invoice" onClick={() => void shareInvoice()}><ShareIcon /></button>
+      </header>
+
+      <section className="ck-mobile-invoice-success">
+        <span><CheckIcon /></span>
+        <div><strong>Payment successful!</strong><small>Your order has been confirmed.</small><small>Transaction ID: AAH2073789838</small></div>
+        <NoteIcon />
+      </section>
+
+      <article className="ck-mobile-invoice-card">
+        <header className="ck-mobile-invoice-brand">
+          <strong>aahaa<span>⌣</span></strong>
+          <div><b>TAX INVOICE</b><small>Homemade Food For Your Journey</small></div>
+        </header>
+        <dl className="ck-mobile-invoice-meta">
+          <div><dt>Invoice Number</dt><dd>AAH20261018-001</dd></div>
+          <div><dt>Order ID</dt><dd>AAH20346389383-001</dd></div>
+          <div><dt>Order Date</dt><dd>{invoiceDate}, 01:02 PM</dd></div>
+          <div><dt>Payment Method</dt><dd>{paymentLabel}</dd></div>
+        </dl>
+        <div className="ck-mobile-invoice-kitchen">
+          <img src={imgKitchenLakshmi} alt="" />
+          <div>
+            <strong>From Lakshmi’s Kitchen</strong>
+            <span className="ck-mobile-payment-veg"><LeafIcon /> Vegetarian</span>
+            <small>{itemCount} items - {bag.map(({ meal }) => meal.name).join(", ")}</small>
+          </div>
+        </div>
+        <div className="ck-mobile-invoice-pickup">
+          <span><PinIcon /><small>Pickup point</small><strong>{stop.name}</strong></span>
+          <span><ClockIcon /><small>Pickup time</small><strong>{stop.time}</strong></span>
+        </div>
+        <div className="ck-mobile-invoice-items">
+          <div className="ck-mobile-invoice-table-head"><span>Item</span><span>Qty</span><span>Amount</span></div>
+          {bag.map(({ meal, qty }) => (
+            <div className="ck-mobile-invoice-item" key={meal.id}>
+              <img src={meal.photo} alt="" />
+              <span><strong>{meal.name}</strong><small>{meal.description}</small></span>
+              <span>{qty}</span>
+              <strong>{formatRupees(meal.price * qty)}</strong>
+            </div>
+          ))}
+        </div>
+        <div className="ck-mobile-invoice-totals">
+          <p><span>Items total ({itemCount} items)</span><strong>{formatRupees(subtotal)}</strong></p>
+          <p><span>Delivery fee</span><strong>{formatRupees(30)}</strong></p>
+          <p><span>GST &amp; other charges</span><strong>{formatCartAmountForCheckout(25.3)}</strong></p>
+          <p className="ck-mobile-invoice-paid"><strong>Total paid</strong><strong>{formatCartAmountForCheckout(total)}</strong></p>
+        </div>
+      </article>
+
+      <div className="ck-mobile-invoice-actions">
+        <button type="button" onClick={() => window.print()}><DownloadIcon />Download invoice</button>
+        <button type="button" onClick={() => void shareInvoice()}><ShareIcon />Share invoice</button>
+      </div>
+      {shareMessage ? <p className="ck-mobile-invoice-share-message" role="status">{shareMessage}</p> : null}
+    </main>
+  );
+}
+
+function OrderDetail({
+  icon,
+  label,
+  value,
+  action,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="ck-order-detail">
+      <span className="ck-order-detail-icon">{icon}</span>
+      <span><small>{label}</small><strong>{value}</strong></span>
+      {action}
+    </div>
+  );
+}
+
+function TrackOrderPage({ bag, stop, journey }: {
+  bag: BagLine[];
+  stop: ReturnType<typeof pickupMeta>;
+  journey: JourneyChoice;
+}) {
+  const total = bag.reduce((sum, line) => sum + line.meal.price * line.qty, 0) + 23;
+  const firstLine = bag[0];
+  const orderDate = `${journey.date.getDate()} ${journey.date.toLocaleString("en", { month: "short" })} ${journey.date.getFullYear()}`;
+
+  return (
+    <main className="ck-main ck-track-order-main">
+      <section className="ck-mobile-journey">
+        <header className="ck-mobile-journey-heading">
+          <h1>Track Journey</h1>
+          <p>Stay updated on your food pickup</p>
+        </header>
+        {firstLine ? (
+          <article className="ck-mobile-journey-order">
+            <img src={firstLine.meal.photo} alt="" />
+            <div className="ck-mobile-journey-order-info">
+              <strong>Lakshmi’s Kitchen</strong>
+              <small>Everyday South Indian comfort food</small>
+              <small><CalendarIcon />{orderDate} · {stop.time} Pickup</small>
+              <b>{formatRupees(firstLine.meal.price * firstLine.qty)}</b>
+            </div>
+            <span className="ck-mobile-journey-veg"><VegMark /> Vegetarian</span>
+            <button type="button" onClick={() => navigate(PATHS.orderSummary)}>View details <span>›</span></button>
+          </article>
+        ) : null}
+        <section className="ck-mobile-journey-tracking">
+          <div className="ck-mobile-journey-status">
+            <strong><span aria-hidden="true">🛵</span> On the way to pickup stop</strong>
+            <span>ETA at pickup stop<b>11:45 AM</b></span>
+          </div>
+          <div className="ck-mobile-journey-map">
+            <img src={trackMapBase} alt="" />
+            <div className="ck-mobile-journey-map-hint">Ramesh is on the way<br />to the pickup stop</div>
+            <img className="ck-mobile-journey-rider" src={a.imgCuteCourierOnAMintScooter1} alt="Delivery partner riding to the pickup stop" />
+            <span className="ck-mobile-journey-stop-icon"><BusIcon /></span>
+            <span className="ck-mobile-journey-stop-label">Pickup stop<br /><small>{stop.name}</small></span>
+          </div>
+          <div className="ck-mobile-journey-progress">
+            <span className="ck-mobile-journey-progress-icon"><DeliveryIcon /></span>
+            <div><strong>On the way</strong><small>Partner is heading to<br />the pickup stop.</small></div>
+            <span className="ck-mobile-journey-progress-line" aria-hidden="true" />
+            <span className="ck-mobile-journey-progress-next"><BusIcon /></span>
+            <div><strong>Ready for pickup</strong><small>Collect your order at<br />the pickup stop.</small></div>
+          </div>
+        </section>
+        <section className="ck-mobile-journey-card ck-mobile-partner">
+          <h2>Delivery Partner</h2>
+          <div>
+            <img src={a.imgRedHattedDeliveryRiderWithParcel1} alt="" />
+            <span><strong>Ramesh</strong><small>★ 4.8 (320+ deliveries)</small></span>
+            <a href="tel:+919876543210" aria-label="Call delivery partner"><PhoneIcon /></a>
+            <a href="sms:+919876543210" aria-label="Message delivery partner"><ChatBubbleIcon /></a>
+          </div>
+        </section>
+        <section className="ck-mobile-journey-card ck-mobile-bike">
+          <h2>Bike details</h2>
+          <div>
+            <img src={a.imgCuteCourierOnAMintScooter1} alt="" />
+            <span><strong>TVS Jupiter</strong><small>TN 70 AB 1234</small></span>
+            <b>🛵&nbsp; aahaa Partner</b>
+          </div>
+        </section>
+        <section className="ck-mobile-journey-card ck-mobile-pickup">
+          <span className="ck-mobile-pickup-icon"><BusIcon /></span>
+          <div><strong>Pickup stop</strong><small>Hosur · Food pickup stop</small><small><RoutePin color="#ff4b2b" />{stop.detail}</small></div>
+          <button type="button" onClick={() => navigate(PATHS.trackOrder)}><RoutePin color="#ff4b2b" /> View on map</button>
+        </section>
+      </section>
+      <header className="ck-track-heading">
+        <button type="button" aria-label="Back to order summary" onClick={() => navigate(PATHS.orderSummary)}><BackChevronIcon /></button>
+        <div><h1>Track your order</h1><p>Order ID: #AHA-728361</p></div>
+        <strong className="ck-track-live"><span />On the way</strong>
+      </header>
+      <div className="ck-track-layout">
+        <aside className="ck-track-sidebar">
+          <section className="ck-track-items">
+            <h2><BagIcon />Order items</h2>
+            {bag.map(({ meal, qty }) => (
+              <div className="ck-track-item" key={meal.id}>
+                <img src={meal.photo} alt="" />
+                <span><strong>{meal.name}</strong><small>{meal.pack ?? `${qty} serving${qty === 1 ? "" : "s"}`}</small></span>
+                <strong>{formatRupees(meal.price * qty)}</strong>
+              </div>
+            ))}
+            <p><strong>Total amount</strong><strong>{formatRupees(total)}</strong></p>
+          </section>
+          <section className="ck-track-partner">
+            <img src={a.imgRedHattedDeliveryRiderWithParcel1} alt="" />
+            <span><small>Delivery partner</small><strong>Arun Kumar</strong><small className="ck-track-rating">★ 4.8&nbsp; | &nbsp;1,250+ deliveries</small></span>
+            <a href="tel:+919876543210" aria-label="Call delivery partner"><PhoneIcon /></a>
+          </section>
+        </aside>
+        <section className="ck-track-map" aria-label={`Delivery route to ${stop.name} bus stand`}>
+          <img className="ck-track-map-base" src={trackMapBase} alt="" />
+          <div className="ck-map-place ck-map-place--north">Denkanikottai</div>
+          <div className="ck-map-place ck-map-place--east">Shoolagiri</div>
+          <div className="ck-map-place ck-map-place--south">Kelamangalam</div>
+          <div className="ck-map-place ck-map-place--west">Anekal</div>
+          <svg className="ck-map-route" viewBox="0 0 1000 400" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M110 245 C245 255 310 325 470 315 S700 245 820 260" fill="none" stroke="#fff" strokeWidth="12" strokeLinecap="round" />
+            <path d="M110 245 C245 255 310 325 470 315 S700 245 820 260" fill="none" stroke="#ff541f" strokeWidth="6" strokeLinecap="round" />
+          </svg>
+          <div className="ck-map-cook">
+            <span><img src={cookLakshmiMenu} alt="" /></span>
+            <span><strong>Cook’s kitchen</strong><small>Velandipalayam</small></span>
+          </div>
+          <span className="ck-map-point ck-map-point--start" />
+          <span className="ck-map-rider" aria-label="Delivery partner on the way"><img src={a.imgCuteCourierOnAMintScooter1} alt="" /></span>
+          <span className="ck-map-arrival">Arriving in<strong>18 mins</strong></span>
+          <span className="ck-map-point ck-map-point--stop"><BusIcon /></span>
+          <div className="ck-map-stop-card"><span><BusIcon /></span><strong>{stop.name} bus stand</strong><img src={imgBusStop} alt="" /></div>
+          <div className="ck-map-controls" aria-hidden="true"><span>◎</span><span>＋</span><span>−</span></div>
+        </section>
+      </div>
+      <ol className="ck-track-timeline">
+        <li className="is-complete"><span><CheckIcon /></span><strong>Order confirmed</strong><small>12:42 PM</small><p>Your order has been received.</p></li>
+        <li className="is-complete"><span><CheckIcon /></span><strong>Preparing</strong><small>01:00 PM</small><p>Home cook is preparing your food.</p></li>
+        <li className="is-current"><span><DeliveryIcon /></span><strong>On the way</strong><small>01:25 PM</small><p>Your order is on the way from the cook’s kitchen to {stop.name} bus stand.</p></li>
+        <li><span><BusIcon /></span><strong>Arriving at pickup point</strong><small>~ 01:43 PM</small><p>We will notify you once it reaches the pickup point.</p></li>
+      </ol>
     </main>
   );
 }
@@ -1699,25 +3193,28 @@ function Chip({
   );
 }
 
-function MobileTabBar() {
+function MobileTabBar({ active }: { active: "home" | "orders" | "track" | "profile" }) {
+  const items = [
+    { id: "home", label: "Home", icon: <HomeNavIcon />, path: PATHS.cooks },
+    { id: "orders", label: "My Orders", icon: <OrdersNavIcon />, path: PATHS.myOrders },
+    { id: "track", label: "Track Journey", icon: <TrackNavIcon />, path: PATHS.trackOrder },
+    { id: "profile", label: "Profile", icon: <ProfileNavIcon />, path: PATHS.profile },
+  ] as const;
+
   return (
     <nav className="ck-m-nav" aria-label="Primary">
-      <button type="button" className="is-on">
-        <HomeNavIcon />
-        Home
-      </button>
-      <button type="button">
-        <OrdersNavIcon />
-        My Orders
-      </button>
-      <button type="button">
-        <TrackNavIcon />
-        Track Journey
-      </button>
-      <button type="button">
-        <ProfileNavIcon />
-        Profile
-      </button>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={active === item.id ? "is-on" : undefined}
+          aria-current={active === item.id ? "page" : undefined}
+          onClick={() => navigate(item.path)}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
     </nav>
   );
 }
@@ -1801,9 +3298,8 @@ function OrdersNavIcon() {
 function TrackNavIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <circle cx="11" cy="11" r="3" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M11 3.5v2.2M11 16.3v2.2M3.5 11h2.2M16.3 11h2.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2.5 2.5" />
+      <path d="M11 19s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx="11" cy="9" r="2" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -1900,6 +3396,1212 @@ function ProfileIcon() {
   );
 }
 
+type AccountSection = "profile" | "orders" | "payments" | "notifications" | "settings" | "support" | "about" | "logout";
+
+function AccountSidebar({
+  active,
+  onPaymentMethods,
+  className,
+}: {
+  active: AccountSection;
+  onPaymentMethods?: () => void;
+  className?: string;
+}) {
+  const items: { id: AccountSection; label: string; description: string; path: string; icon: ReactNode; mobileOnly?: boolean }[] = [
+    { id: "profile", label: "My Profile", description: "Name, mobile number, email", path: PATHS.profile, icon: <ProfileIcon /> },
+    { id: "orders", label: "My Orders", description: "View and track your orders", path: PATHS.myOrders, icon: <OrdersNavIcon /> },
+    { id: "payments", label: "Payment methods", description: "Manage cards and UPI", path: PATHS.paymentMethod, icon: <CreditCardIcon />, mobileOnly: true },
+    { id: "notifications", label: "Notifications", description: "Order updates and offers", path: PATHS.notifications, icon: <NotificationIcon /> },
+    { id: "settings", label: "App settings", description: "Language, privacy and more", path: PATHS.appSettings, icon: <SettingsIcon /> },
+    { id: "support", label: "Help & support", description: "Get help with orders, payments and more", path: PATHS.helpSupport, icon: <HelpIcon /> },
+    { id: "about", label: "About Aahaa", description: "App version, terms and policies", path: PATHS.about, icon: <InfoIcon /> },
+  ];
+
+  return (
+    <nav className={["ck-profile-sidebar", className].filter(Boolean).join(" ")} aria-label="Profile menu">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          className={[
+            item.mobileOnly ? "ck-mobile-account-payment" : "",
+            item.id === "orders" ? "ck-account-menu-orders" : "",
+            active === item.id ? "is-current" : "",
+          ].filter(Boolean).join(" ") || undefined}
+          type="button"
+          aria-current={active === item.id ? "page" : undefined}
+          onClick={() => {
+            if (item.id === "payments" && onPaymentMethods) {
+              onPaymentMethods();
+              return;
+            }
+            if (item.id === "profile" && window.matchMedia("(max-width: 767px)").matches) {
+              navigate(PATHS.accountDetails);
+              return;
+            }
+            navigate(item.path);
+          }}
+        >
+          {item.icon}
+          <span className="ck-account-label-desktop">{item.label}</span>
+          <span className="ck-account-label-mobile">
+            <strong>{item.id === "profile" ? "Account details" : item.label}</strong>
+            <small>{item.description}</small>
+          </span>
+          <span className="ck-account-chevron" aria-hidden="true">›</span>
+        </button>
+      ))}
+      <button
+        className={active === "logout" ? "ck-profile-logout is-current" : "ck-profile-logout"}
+        type="button"
+        aria-current={active === "logout" ? "page" : undefined}
+        onClick={() => navigate(PATHS.logout)}
+      >
+        <LogoutIcon />
+        <span className="ck-account-label-desktop">Log out</span>
+        <span className="ck-account-label-mobile"><strong>Log out</strong></span>
+        <span className="ck-account-chevron" aria-hidden="true">›</span>
+      </button>
+    </nav>
+  );
+}
+
+function ProfilePage({ onPaymentMethods }: { onPaymentMethods: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("Saran");
+  const [phone, setPhone] = useState("+91 98765 43210");
+  const [email, setEmail] = useState("saran@email.com");
+
+  return (
+    <main className="ck-main ck-profile-main">
+      <header className="ck-mobile-account-heading"><h1>Profile</h1></header>
+      <div className="ck-mobile-profile-summary">
+        <span className="ck-mobile-profile-avatar"><ProfileIcon /></span>
+        <div>
+          <strong>{name}</strong>
+          <small>{phone}</small>
+          <small>{email}</small>
+        </div>
+      </div>
+      <AccountSidebar active="profile" onPaymentMethods={onPaymentMethods} className="ck-account-profile-menu" />
+      <section className="ck-profile-content">
+        <header className="ck-profile-heading"><h1>My Profile</h1><p>Manage your profile details.</p></header>
+        <article className="ck-profile-card">
+          <div className="ck-profile-person">
+            <span className="ck-profile-photo"><ProfileIcon /><span><CameraIcon /></span></span>
+            <div className="ck-profile-primary-data">
+              {editing ? (
+                <>
+                  <label>Name<input value={name} onChange={(event) => setName(event.target.value)} /></label>
+                  <label>Mobile number<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+                  <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+                </>
+              ) : (
+                <>
+                  <strong>{name}</strong>
+                  <span>{phone}</span>
+                  <span>{email}</span>
+                </>
+              )}
+            </div>
+            <button className="ck-profile-edit" type="button" onClick={() => setEditing((current) => !current)}>
+              <PencilIcon />{editing ? "Save" : "Edit"}
+            </button>
+          </div>
+          {!editing ? (
+            <div className="ck-profile-details">
+              <p><PhoneIcon /><strong>Mobile number</strong><span>{phone}</span></p>
+              <p><EmailIcon /><strong>Email address</strong><span>{email}</span></p>
+              <p><ProfileIcon /><strong>Name</strong><span>{name}</span></p>
+            </div>
+          ) : null}
+        </article>
+      </section>
+    </main>
+  );
+}
+
+function AccountDetailsPage() {
+  const [name, setName] = useState("Saran");
+  const [phone, setPhone] = useState("+91 98765 43210");
+  const [email, setEmail] = useState("saran@example.com");
+  const [editing, setEditing] = useState({ name: false, phone: false, email: false });
+
+  if (!window.matchMedia("(max-width: 767px)").matches) {
+    return <ProfilePage onPaymentMethods={() => navigate(PATHS.paymentMethod)} />;
+  }
+
+  function toggleEditing(field: keyof typeof editing) {
+    setEditing((current) => ({ ...current, [field]: !current[field] }));
+  }
+
+  function saveDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEditing({ name: false, phone: false, email: false });
+  }
+
+  return (
+    <main className="ck-account-details">
+      <header className="ck-account-details-heading">
+        <h1>Account details</h1>
+        <p>Manage your personal information</p>
+      </header>
+      <form className="ck-account-details-form" onSubmit={saveDetails}>
+        <AccountDetailField
+          label="Full name"
+          value={name}
+          icon={<ProfileIcon />}
+          editing={editing.name}
+          onChange={setName}
+          onEdit={() => toggleEditing("name")}
+        />
+        <AccountDetailField
+          label="Mobile number"
+          value={phone}
+          icon={<PhoneIcon />}
+          verified
+          editing={editing.phone}
+          onChange={setPhone}
+          onEdit={() => toggleEditing("phone")}
+        />
+        <AccountDetailField
+          label="Email address"
+          value={email}
+          icon={<EmailIcon />}
+          verified
+          editing={editing.email}
+          onChange={setEmail}
+          onEdit={() => toggleEditing("email")}
+        />
+        <p className="ck-account-details-note">
+          <InfoIcon />
+          <span>Your details help us manage your orders and updates.</span>
+        </p>
+        <button className="ck-account-details-save" type="submit">Save changes</button>
+      </form>
+    </main>
+  );
+}
+
+function AccountDetailField({
+  label,
+  value,
+  icon,
+  verified = false,
+  editing,
+  onChange,
+  onEdit,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  verified?: boolean;
+  editing: boolean;
+  onChange: (value: string) => void;
+  onEdit: () => void;
+}) {
+  return (
+    <label className="ck-account-detail-field">
+      <span className="ck-account-detail-label">{label}</span>
+      <span className="ck-account-detail-control">
+        <span className="ck-account-detail-icon">{icon}</span>
+        <input
+          aria-label={label}
+          type={label === "Email address" ? "email" : label === "Mobile number" ? "tel" : "text"}
+          value={value}
+          readOnly={!editing}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {verified ? <span className="ck-account-detail-verified"><CheckIcon />Verified</span> : null}
+        <button
+          className="ck-account-detail-edit"
+          type="button"
+          aria-label={`${editing ? "Finish editing" : "Edit"} ${label.toLowerCase()}`}
+          onClick={onEdit}
+        >
+          <PencilIcon />
+        </button>
+      </span>
+    </label>
+  );
+}
+
+type OrderFilter = "All Orders" | "Ongoing" | "Delivered" | "Cancelled";
+type OrderStatus = "Delivered" | "Preparing" | "On the way" | "Cancelled";
+type MobileOrderFilter = "All Orders" | "Completed" | "Cancelled";
+type MobileOrderStatus = "Completed" | "Preparing" | "On the way" | "Cancelled";
+
+function getOrderMealPhoto(id: string) {
+  const meal = LAKSHMI_MEALS.find((item) => item.id === id);
+  if (!meal) throw new Error(`Unknown order meal: ${id}`);
+  return meal.photo;
+}
+
+const MY_ORDERS: {
+  cook: string;
+  category: string;
+  image: string;
+  item: string;
+  date: string;
+  time: string;
+  price: number;
+  status: OrderStatus;
+}[] = [
+  {
+    cook: "Lakshmi’s Kitchen",
+    category: "South Indian Meals",
+    image: getOrderMealPhoto("veg-lunch"),
+    item: "Homestyle veg lunch",
+    date: "18 Oct 2026",
+    time: "1:00 PM",
+    price: 60,
+    status: "Delivered",
+  },
+  {
+    cook: "Meena’s Home Food",
+    category: "Homemade Meals",
+    image: getOrderMealPhoto("curd-rice"),
+    item: "Curd rice & pickle",
+    date: "16 Oct 2026",
+    time: "12:30 PM",
+    price: 60,
+    status: "Delivered",
+  },
+  {
+    cook: "Agalya’s Kitchen",
+    category: "South Indian Comfort Food",
+    image: getOrderMealPhoto("idli"),
+    item: "Soft idli & chutney",
+    date: "14 Oct 2026",
+    time: "1:15 PM",
+    price: 100,
+    status: "Delivered",
+  },
+  {
+    cook: "Padma’s Kitchen",
+    category: "Homemade Meals",
+    image: getOrderMealPhoto("pulao"),
+    item: "Vegetable pulao",
+    date: "11 Oct 2026",
+    time: "12:45 PM",
+    price: 80,
+    status: "Delivered",
+  },
+  {
+    cook: "Lakshmi’s Kitchen",
+    category: "South Indian Meals",
+    image: getOrderMealPhoto("lemon-rice"),
+    item: "Lemon rice & potato fry",
+    date: "08 Oct 2026",
+    time: "1:00 PM",
+    price: 70,
+    status: "Preparing",
+  },
+];
+
+const MOBILE_MY_ORDERS: {
+  cook: string;
+  category: string;
+  image: string;
+  item: string;
+  date: string;
+  time: string;
+  price: number;
+  status: MobileOrderStatus;
+}[] = [
+  ...MY_ORDERS.map((order) => ({
+    ...order,
+    status: order.status === "Delivered" ? "Completed" as const : order.status,
+  })),
+  {
+    cook: "Meena’s Home Food",
+    category: "Homemade Meals",
+    image: getOrderMealPhoto("curd-rice"),
+    item: "Curd rice & pickle",
+    date: "06 Oct 2026",
+    time: "12:30 PM",
+    price: 60,
+    status: "Cancelled",
+  },
+];
+
+function MyOrdersPage() {
+  const [filter, setFilter] = useState<OrderFilter>("All Orders");
+  const [mobileFilter, setMobileFilter] = useState<MobileOrderFilter>("All Orders");
+  const filters: OrderFilter[] = ["All Orders", "Ongoing", "Delivered", "Cancelled"];
+  const mobileFilters: MobileOrderFilter[] = ["All Orders", "Completed", "Cancelled"];
+  const counts: Record<OrderFilter, number> = {
+    "All Orders": MY_ORDERS.length,
+    Ongoing: MY_ORDERS.filter((order) => order.status === "Preparing" || order.status === "On the way").length,
+    Delivered: MY_ORDERS.filter((order) => order.status === "Delivered").length,
+    Cancelled: MY_ORDERS.filter((order) => order.status === "Cancelled").length,
+  };
+  const visibleOrders = MY_ORDERS.filter((order) => {
+    if (filter === "All Orders") return true;
+    if (filter === "Ongoing") return order.status === "Preparing" || order.status === "On the way";
+    return order.status === filter;
+  });
+  const mobileCounts: Record<MobileOrderFilter, number> = {
+    "All Orders": MOBILE_MY_ORDERS.length,
+    Completed: MOBILE_MY_ORDERS.filter((order) => order.status === "Completed").length,
+    Cancelled: MOBILE_MY_ORDERS.filter((order) => order.status === "Cancelled").length,
+  };
+  const visibleMobileOrders = MOBILE_MY_ORDERS.filter((order) => (
+    mobileFilter === "All Orders" || order.status === mobileFilter
+  ));
+
+  return (
+    <main className="ck-main ck-profile-main ck-orders-main">
+      <AccountSidebar active="orders" />
+      <section className="ck-orders-content">
+        <header className="ck-profile-heading ck-orders-desktop-heading"><h1>My Orders</h1><p>Track your past and current orders.</p></header>
+        <header className="ck-mobile-account-heading"><h1>My Orders</h1></header>
+        <div className="ck-orders-filters ck-orders-desktop-filters" role="tablist" aria-label="Filter orders">
+          {filters.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={filter === item}
+              className={filter === item ? "is-selected" : undefined}
+              onClick={() => setFilter(item)}
+            >
+              {item}<span>{counts[item]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="ck-orders-list ck-orders-desktop-list">
+          {visibleOrders.map((order) => (
+            <article className="ck-order-row" key={`${order.cook}-${order.date}`}>
+              <img src={order.image} alt="" />
+              <div className="ck-order-row-info">
+                <strong>{order.cook}</strong>
+                <small>{order.category}</small>
+                <small className="ck-order-row-date"><CalendarIcon />{order.date}<span />{order.time}</small>
+                <small>{order.item} · {formatRupees(order.price)}</small>
+              </div>
+              <span className={`ck-order-row-status${order.status === "Preparing" || order.status === "On the way" ? " is-ongoing" : order.status === "Cancelled" ? " is-cancelled" : ""}`}>
+                {order.status}
+              </span>
+              <button
+                className="ck-order-row-details"
+                type="button"
+                onClick={() => navigate(order.status === "Preparing" || order.status === "On the way" ? PATHS.trackOrder : PATHS.orderSummary)}
+              >
+                View details <span>›</span>
+              </button>
+            </article>
+          ))}
+          {visibleOrders.length === 0 ? <p className="ck-orders-empty">No {filter.toLowerCase()} found.</p> : null}
+        </div>
+        <div className="ck-orders-mobile-filters" role="tablist" aria-label="Filter orders">
+          {mobileFilters.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={mobileFilter === item}
+              className={mobileFilter === item ? "is-selected" : undefined}
+              onClick={() => setMobileFilter(item)}
+            >
+              {item}<span>{mobileCounts[item]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="ck-orders-mobile-list">
+          {visibleMobileOrders.map((order) => {
+            const cancelled = order.status === "Cancelled";
+            const currentStep = order.status === "Completed" ? 4 : order.status === "On the way" ? 3 : 2;
+            return (
+              <article className={`ck-mobile-order-card${cancelled ? " is-cancelled" : ""}`} key={`${order.cook}-${order.date}`}>
+                <div className="ck-mobile-order-top">
+                  <img src={order.image} alt="" />
+                  <div className="ck-mobile-order-info">
+                    <strong>{order.cook}</strong>
+                    <small>{order.item}</small>
+                    <small>{order.date} · {order.time}</small>
+                  </div>
+                  <span className="ck-mobile-order-status">{order.status}</span>
+                </div>
+                <div className="ck-mobile-order-total">
+                  <span>{formatRupees(order.price)}</span>
+                  <button
+                    type="button"
+                    onClick={() => navigate(order.status === "Preparing" || order.status === "On the way" ? PATHS.trackOrder : PATHS.orderSummary)}
+                  >
+                    View details <span aria-hidden="true">›</span>
+                  </button>
+                </div>
+                {cancelled ? (
+                  <p className="ck-mobile-order-cancel-note">This order was cancelled</p>
+                ) : (
+                  <ol className="ck-mobile-order-progress" aria-label={`Order ${order.status.toLowerCase()}`}>
+                    {["Order placed", "Preparing", "On the way", "Delivered"].map((step, index) => (
+                      <li className={index < currentStep ? "is-done" : ""} key={step}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+              </article>
+            );
+          })}
+          {visibleMobileOrders.length === 0 ? <p className="ck-orders-empty">No {mobileFilter.toLowerCase()} found.</p> : null}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+type AccountNotification = {
+  title: string;
+  description: string;
+  time: string;
+  icon: "meal" | "gift" | "order" | "cook" | "bell" | "offer" | "info";
+  read: boolean;
+};
+
+const INITIAL_NOTIFICATIONS: AccountNotification[] = [
+  { title: "Your order has been delivered", description: "Your order from Lakshmi’s Kitchen has been delivered successfully.", time: "10 min ago", icon: "meal", read: false },
+  { title: "Special offer for you!", description: "Get 10% off on your next order from Meena’s Home Food.", time: "2 hours ago", icon: "gift", read: false },
+  { title: "Your order is out for delivery", description: "Your order from Padma’s Kitchen is on the way.", time: "4 hours ago", icon: "order", read: false },
+  { title: "New home cook near your route", description: "Agalya’s Kitchen is now available at Hosur bus stop.", time: "1 day ago", icon: "cook", read: false },
+  { title: "Order confirmed", description: "Your order from Meena’s Home Food has been confirmed.", time: "2 days ago", icon: "bell", read: false },
+  { title: "Weekend special!", description: "Enjoy homemade meals with exclusive offers this weekend.", time: "3 days ago", icon: "offer", read: false },
+  { title: "Welcome to aahaa!", description: "Thank you for joining aahaa. Start exploring homemade meals now!", time: "5 days ago", icon: "info", read: false },
+];
+
+function NotificationArt({ type }: { type: AccountNotification["icon"] }) {
+  const icon = {
+    meal: null,
+    gift: <GiftIcon />,
+    order: <MenuIcon />,
+    cook: <StepCookIcon />,
+    bell: <NotificationIcon />,
+    offer: <span className="ck-notification-percent">%</span>,
+    info: <InfoIcon />,
+  }[type];
+  return (
+    <span className="ck-notification-art">
+      {type === "meal" ? <img src={getOrderMealPhoto("veg-lunch")} alt="" /> : icon}
+    </span>
+  );
+}
+
+function NotificationsPage() {
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [openMenu, setOpenMenu] = useState<number | null>(null);
+
+  function updateNotification(index: number, update: (notification: AccountNotification) => AccountNotification) {
+    setNotifications((current) => current.map((notification, itemIndex) => itemIndex === index ? update(notification) : notification));
+    setOpenMenu(null);
+  }
+
+  return (
+    <main className="ck-main ck-profile-main ck-notifications-main">
+      <AccountSidebar active="notifications" />
+      <section className="ck-profile-content ck-account-content ck-notifications-desktop">
+        <header className="ck-account-title-row">
+          <div className="ck-profile-heading">
+            <h1>Notifications</h1>
+            <p>Stay updated with your orders, offers and important updates.</p>
+          </div>
+          <button
+            className="ck-notifications-read-all"
+            type="button"
+            onClick={() => setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))}
+          >
+            Mark all as read
+          </button>
+        </header>
+        <div className="ck-notifications-list">
+          {notifications.map((notification, index) => (
+            <article className={`ck-notification-card${notification.read ? " is-read" : ""}`} key={notification.title}>
+              {!notification.read ? <span className="ck-notification-unread" aria-label="Unread" /> : <span className="ck-notification-unread-placeholder" />}
+              <NotificationArt type={notification.icon} />
+              <div className="ck-notification-copy">
+                <strong>{notification.title}</strong>
+                <p>{notification.description}</p>
+              </div>
+              <time>{notification.time}</time>
+              <div className="ck-notification-actions">
+                <button
+                  type="button"
+                  aria-label={`Options for ${notification.title}`}
+                  aria-expanded={openMenu === index}
+                  onClick={() => setOpenMenu((current) => current === index ? null : index)}
+                >
+                  <span aria-hidden="true">⋮</span>
+                </button>
+                {openMenu === index ? (
+                  <div className="ck-notification-menu">
+                    <button type="button" onClick={() => updateNotification(index, (item) => ({ ...item, read: true }))}>Mark as read</button>
+                    <button type="button" onClick={() => { setNotifications((current) => current.filter((_, itemIndex) => itemIndex !== index)); setOpenMenu(null); }}>Remove</button>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))}
+          {notifications.length === 0 ? <p className="ck-settings-empty">You’re all caught up.</p> : null}
+        </div>
+      </section>
+      <MobileNotificationPreferences />
+    </main>
+  );
+}
+
+const MOBILE_NOTIFICATION_GROUPS = [
+  {
+    title: "Order updates",
+    options: [
+      { id: "order-status", title: "Order status updates", description: "Get notified about order confirmation, preparation, and delivery", icon: "bell", enabled: true },
+      { id: "kitchen", title: "Kitchen updates", description: "Get notified about menu updates, availability and special items", icon: "chef", enabled: true },
+      { id: "offers", title: "Offers and discounts", description: "Get notified about exclusive offers and deals", icon: "tag", enabled: true },
+    ],
+  },
+  {
+    title: "Recommendations",
+    options: [
+      { id: "recommended-kitchens", title: "Recommended kitchens", description: "Get suggestions based on your taste and location", icon: "star", enabled: true },
+      { id: "food-menu", title: "Food and menu updates", description: "Get notified about new kitchens and new menu items", icon: "menu", enabled: false },
+    ],
+  },
+  {
+    title: "Account and security",
+    options: [
+      { id: "account-alerts", title: "Account alerts", description: "Get notified about important account and security updates", icon: "shield", enabled: true },
+      { id: "app-updates", title: "App updates", description: "Get notified about new features and improvements", icon: "megaphone", enabled: false },
+    ],
+  },
+] as const;
+
+type MobileNotificationOption = (typeof MOBILE_NOTIFICATION_GROUPS)[number]["options"][number];
+
+function MobileNotificationIcon({ type }: { type: MobileNotificationOption["icon"] }) {
+  const paths = {
+    bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /><path d="M12 3V2" /></>,
+    chef: <><path d="M6 19h12v-8a4 4 0 0 0-1.6-3.2A4.5 4.5 0 0 0 8 6.5 3.5 3.5 0 0 0 6 13v6Z" /><path d="M6 15h12M9 19v2m6-2v2" /></>,
+    tag: <><path d="m3 12 9 9 9-9-9-9H3v9Z" /><circle cx="7.5" cy="7.5" r="1" /></>,
+    star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
+    menu: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 8h8m-8 4h8m-8 4h5" /></>,
+    shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>,
+    megaphone: <><path d="m3 11 18-5v12L3 13v-2Z" /><path d="M11 15.2 13 21H8l-1.5-6.8M21 10v4" /></>,
+  } satisfies Record<MobileNotificationOption["icon"], ReactNode>;
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[type]}
+    </svg>
+  );
+}
+
+function MobileNotificationPreferences() {
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => (
+    Object.fromEntries(MOBILE_NOTIFICATION_GROUPS.flatMap((group) => group.options.map((option) => [option.id, option.enabled])))
+  ));
+
+  return (
+    <section className="ck-mobile-notifications">
+      <header className="ck-mobile-notifications-header">
+        <button type="button" aria-label="Back to profile" onClick={() => navigate(PATHS.profile)}>
+          <BackChevronIcon />
+        </button>
+        <button className="ck-wordmark" type="button" aria-label="aahaa" onClick={() => navigate(PATHS.home)}>
+          a<span className="ck-mark-aa">ahaa<SmileIcon /></span>
+        </button>
+      </header>
+      <div className="ck-mobile-notifications-title">
+        <h1>Notifications</h1>
+        <p>Manage your notifications and stay updated</p>
+      </div>
+      {MOBILE_NOTIFICATION_GROUPS.map((group) => (
+        <section className="ck-mobile-notification-group" key={group.title}>
+          <h2>{group.title}</h2>
+          <div className="ck-mobile-notification-card">
+            {group.options.map((option) => (
+              <div className="ck-mobile-notification-option" key={option.id}>
+                <span className="ck-mobile-notification-icon"><MobileNotificationIcon type={option.icon} /></span>
+                <span className="ck-mobile-notification-copy">
+                  <strong>{option.title}</strong>
+                  <small>{option.description}</small>
+                </span>
+                <button
+                  className={`ck-settings-switch${enabled[option.id] ? " is-on" : ""}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled[option.id]}
+                  aria-label={option.title}
+                  onClick={() => setEnabled((current) => ({ ...current, [option.id]: !current[option.id] }))}
+                >
+                  <span />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </section>
+  );
+}
+
+const SETTING_OPTIONS = [
+  { id: "orders", title: "Order updates", description: "Get notified about order confirmation, preparation, out for delivery and delivery.", icon: "bell" },
+  { id: "offers", title: "Offers and promotions", description: "Receive updates about discounts and special offers.", icon: "tag" },
+  { id: "cooks", title: "New home cooks nearby", description: "Get notified when new home cooks are available at your route.", icon: "cook" },
+  { id: "general", title: "General updates", description: "Important announcements and app updates.", icon: "info" },
+] as const;
+
+function AppSettingsPage() {
+  const [enabled, setEnabled] = useState<Record<(typeof SETTING_OPTIONS)[number]["id"], boolean>>({
+    orders: true,
+    offers: true,
+    cooks: true,
+    general: true,
+  });
+  const [language, setLanguage] = useState("English");
+
+  return (
+    <main className="ck-main ck-profile-main ck-app-settings-main">
+      <AccountSidebar active="settings" />
+      <section className="ck-profile-content ck-account-content">
+        <header className="ck-profile-heading">
+          <h1>App settings</h1>
+          <p>Customize your app experience.</p>
+        </header>
+        <section className="ck-settings-card">
+          <header className="ck-settings-card-heading">
+            <h2>Notifications</h2>
+            <p>Choose what updates you want to receive.</p>
+          </header>
+          <div className="ck-settings-options">
+            {SETTING_OPTIONS.map((option) => (
+              <div className="ck-settings-option" key={option.id}>
+                <span className="ck-settings-icon">
+                  {option.icon === "bell" ? <NotificationIcon /> : option.icon === "tag" ? <TagIcon /> : option.icon === "cook" ? <ShelterIcon /> : <InfoIcon />}
+                </span>
+                <div className="ck-settings-option-copy">
+                  <strong>{option.title}</strong>
+                  <p>{option.description}</p>
+                </div>
+                <button
+                  className={`ck-settings-switch${enabled[option.id] ? " is-on" : ""}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled[option.id]}
+                  aria-label={option.title}
+                  onClick={() => setEnabled((current) => ({ ...current, [option.id]: !current[option.id] }))}
+                >
+                  <span />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="ck-settings-language">
+          <div>
+            <strong>Language</strong>
+            <p>Choose your preferred language.</p>
+          </div>
+          <span className="ck-settings-icon"><GlobeIcon /></span>
+          <label className="ck-settings-select">
+            <span className="ck-visually-hidden">Preferred language</span>
+            <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+              <option>English</option>
+              <option>தமிழ்</option>
+              <option>हिन्दी</option>
+            </select>
+            <ChevronIcon />
+          </label>
+        </section>
+        <button className="ck-settings-privacy" type="button" onClick={() => navigate(PATHS.privacy)}>
+          <span className="ck-settings-icon"><ShieldIcon /></span>
+          <span><strong>Data and privacy</strong><small>Manage your data and privacy preferences.</small></span>
+          <span className="ck-settings-arrow">›</span>
+        </button>
+      </section>
+      <MobileAppSettings language={language} setLanguage={setLanguage} />
+    </main>
+  );
+}
+
+function MobileAppSettings({
+  language,
+  setLanguage,
+}: {
+  language: string;
+  setLanguage: Dispatch<SetStateAction<string>>;
+}) {
+  return (
+    <section className="ck-mobile-app-settings">
+      <header className="ck-mobile-app-settings-header">
+        <button type="button" aria-label="Back to profile" onClick={() => navigate(PATHS.profile)}>
+          <BackChevronIcon />
+        </button>
+        <button className="ck-wordmark" type="button" aria-label="aahaa" onClick={() => navigate(PATHS.home)}>
+          a<span className="ck-mark-aa">ahaa<SmileIcon /></span>
+        </button>
+      </header>
+      <div className="ck-mobile-app-settings-title">
+        <h1>App settings</h1>
+        <p>Manage your app preferences</p>
+      </div>
+
+      <section className="ck-mobile-app-settings-group">
+        <h2>Language</h2>
+        <div className="ck-mobile-app-settings-card">
+          <div className="ck-mobile-app-settings-row">
+            <span className="ck-mobile-app-settings-icon"><GlobeIcon /></span>
+            <span className="ck-mobile-app-settings-copy">
+              <strong>App language</strong>
+              <small>Choose your preferred language</small>
+            </span>
+            <label className="ck-mobile-app-language">
+              <span className="ck-visually-hidden">App language</span>
+              <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                <option>English</option>
+                <option>தமிழ்</option>
+                <option>हिन्दी</option>
+              </select>
+              <ChevronIcon />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="ck-mobile-app-settings-group">
+        <h2>Privacy</h2>
+        <div className="ck-mobile-app-settings-card">
+          <button className="ck-mobile-app-settings-row" type="button" onClick={() => navigate(PATHS.privacy)}>
+            <span className="ck-mobile-app-settings-icon"><ShieldIcon /></span>
+            <span className="ck-mobile-app-settings-copy">
+              <strong>Privacy settings</strong>
+              <small>Manage your data and privacy</small>
+            </span>
+            <span className="ck-mobile-app-settings-arrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="ck-mobile-app-settings-group">
+        <h2>Notifications</h2>
+        <div className="ck-mobile-app-settings-card">
+          <button className="ck-mobile-app-settings-row" type="button" onClick={() => navigate(PATHS.notifications)}>
+            <span className="ck-mobile-app-settings-icon"><NotificationIcon /></span>
+            <span className="ck-mobile-app-settings-copy">
+              <strong>Notification settings</strong>
+              <small>Manage what you want to be notified about</small>
+            </span>
+            <span className="ck-mobile-app-settings-arrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="ck-mobile-app-settings-group">
+        <h2>About</h2>
+        <div className="ck-mobile-app-settings-card">
+          <button className="ck-mobile-app-settings-row" type="button" onClick={() => navigate(PATHS.about)}>
+            <span className="ck-mobile-app-settings-icon"><InfoIcon /></span>
+            <span className="ck-mobile-app-settings-copy">
+              <strong>App version</strong>
+              <small>Current version of Aahaa</small>
+            </span>
+            <span className="ck-mobile-app-settings-value">v1.0.0</span>
+            <span className="ck-mobile-app-settings-arrow" aria-hidden="true">›</span>
+          </button>
+          <button className="ck-mobile-app-settings-row" type="button" onClick={() => navigate(PATHS.terms)}>
+            <span className="ck-mobile-app-settings-icon"><MenuIcon /></span>
+            <span className="ck-mobile-app-settings-copy">
+              <strong>Terms and policies</strong>
+              <small>Terms of service, privacy policy and more</small>
+            </span>
+            <span className="ck-mobile-app-settings-arrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+const SUPPORT_FAQS = [
+  { question: "How can I track my order?", answer: "Open My Orders and select View details on an ongoing order to see its latest status." },
+  { question: "Can I cancel my order?", answer: "If your order is still being prepared, open its details and contact support for help with cancellation." },
+  { question: "What payment methods are accepted?", answer: "You can pay using UPI apps such as Google Pay, PhonePe and Paytm, or enter another UPI ID." },
+  { question: "How do I contact a home cook?", answer: "Open your order details to find the pickup information and available order support options." },
+];
+
+function HelpSupportPage({
+  bag,
+  journey,
+  stop,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+}) {
+  const [query, setQuery] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactNotice, setContactNotice] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [mobileNotice, setMobileNotice] = useState("");
+  const filteredFaqs = SUPPORT_FAQS.filter((faq) => `${faq.question} ${faq.answer}`.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <main className="ck-main ck-profile-main">
+      <MobileOrderSupport
+        bag={bag}
+        journey={journey}
+        stop={stop}
+        selectedTopic={selectedTopic}
+        setSelectedTopic={setSelectedTopic}
+        notice={mobileNotice}
+        setNotice={setMobileNotice}
+      />
+      <AccountSidebar active="support" />
+      <section className="ck-profile-content ck-account-content">
+        <header className="ck-profile-heading ck-support-heading">
+          <h1>Help &amp; support</h1>
+          <p>Find answers to your questions or get in touch with our support team.</p>
+        </header>
+        <label className="ck-support-search">
+          <SearchIcon />
+          <span className="ck-visually-hidden">Search help topics</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for help (e.g., orders, delivery, payments)" />
+          <button type="button" onClick={() => setQuery((current) => current.trim())}>Search</button>
+        </label>
+        <div className="ck-support-body">
+          <section className="ck-support-faqs">
+            <header>
+              <h2>Frequently asked questions</h2>
+              <p>Here are some common questions from our users.</p>
+            </header>
+            <div className="ck-support-faq-list">
+              {filteredFaqs.map((faq) => (
+                <details key={faq.question}>
+                  <summary>{faq.question}<ChevronIcon /></summary>
+                  <p>{faq.answer}</p>
+                </details>
+              ))}
+              {filteredFaqs.length === 0 ? <p className="ck-support-no-results">No matching questions. Try another search.</p> : null}
+            </div>
+          </section>
+          <aside className="ck-support-card">
+            <div className="ck-support-card-intro">
+              <span className="ck-settings-icon"><HeadsetIcon /></span>
+              <span><strong>Still need help?</strong><small>Our support team is here to assist you.</small></span>
+            </div>
+            <button className="ck-support-contact" type="button" onClick={() => { setContactOpen((current) => !current); setContactNotice(false); }}>
+              <NoteIcon />Contact support <span>›</span>
+            </button>
+            {contactOpen ? (
+              <div className="ck-support-contact-panel" role="status">
+                <p>Our support team is available from 9:00 AM to 9:00 PM, Monday to Sunday.</p>
+                <button type="button" onClick={() => setContactNotice(true)}>Got it</button>
+                {contactNotice ? <small>We’re here to help during support hours.</small> : null}
+              </div>
+            ) : null}
+            <div className="ck-support-hours">
+              <ClockIcon />
+              <span><strong>Support hours</strong><small>9:00 AM – 9:00 PM (Mon – Sun)</small></span>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function MobileOrderSupport({
+  bag,
+  journey,
+  stop,
+  selectedTopic,
+  setSelectedTopic,
+  notice,
+  setNotice,
+}: {
+  bag: BagLine[];
+  journey: JourneyChoice;
+  stop: ReturnType<typeof pickupMeta>;
+  selectedTopic: string;
+  setSelectedTopic: (topic: string) => void;
+  notice: string;
+  setNotice: (notice: string) => void;
+}) {
+  const itemCount = bag.reduce((sum, line) => sum + line.qty, 0);
+  const date = journey.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const topics = [
+    { title: "Track my order", detail: "Current status: Preparing order", icon: <PinIcon />, onClick: () => navigate(PATHS.trackOrder) },
+    { title: "Pickup location or timing", detail: "Check or change pickup details", icon: <ClockIcon />, onClick: () => navigate(PATHS.confirmPickup) },
+    { title: "Missing or incorrect item", detail: "Report missing or wrong items", icon: <BagIcon /> },
+    { title: "Payment or refund", detail: "Get help with payment issues or refunds", icon: <CreditCardIcon /> },
+    { title: "Cancel my order", detail: "Request to cancel this order", icon: <CloseCircleIcon /> },
+    { title: "Other issue", detail: "Tell us more about your problem", icon: <HelpIcon /> },
+  ];
+
+  return (
+    <section className="ck-mobile-order-support">
+      <header className="ck-mobile-support-header">
+        <button type="button" aria-label="Back to order summary" onClick={() => navigate(PATHS.orderSummary)}>
+          <BackChevronIcon />
+        </button>
+        <span className="ck-wordmark">a<span className="ck-mark-aa">ahaa<SmileIcon /></span></span>
+      </header>
+      <div className="ck-mobile-support-title">
+        <div><h1>Help &amp; Support</h1><h2>How can we help?</h2><p>We’re here to make your journey smoother.</p></div>
+        <span><HeadsetIcon /></span>
+      </div>
+      <section className="ck-mobile-support-order">
+        <div className="ck-mobile-support-kitchen">
+          <img src={imgKitchenLakshmi} alt="" />
+          <div>
+            <strong>From Lakshmi’s Kitchen</strong>
+            <small>Order ID: AAH20346389383-001</small>
+            <small>{itemCount} items · {bag.map(({ meal, qty }) => `${meal.name} × ${qty}`).join(", ")}</small>
+          </div>
+        </div>
+        <div className="ck-mobile-support-meta">
+          <span><PinIcon /><small>Pickup point</small><strong>{stop.name}</strong></span>
+          <span><CalendarIcon /><small>{date}</small><strong>{journey.date.toLocaleDateString("en", { weekday: "long" })}</strong></span>
+          <span><ClockIcon /><small>Pickup time</small><strong>{stop.time}</strong></span>
+        </div>
+      </section>
+      <div className="ck-mobile-support-topics">
+        {topics.map((topic) => (
+          <button
+            type="button"
+            key={topic.title}
+            aria-pressed={selectedTopic === topic.title}
+            onClick={() => {
+              setSelectedTopic(topic.title);
+              setNotice(topic.onClick ? "" : `We’ll help you with: ${topic.title}.`);
+              topic.onClick?.();
+            }}
+          >
+            <span className="ck-mobile-support-topic-icon">{topic.icon}</span>
+            <span><strong>{topic.title}</strong><small>{topic.detail}</small></span>
+            <PaymentChevronIcon />
+          </button>
+        ))}
+      </div>
+      <div className="ck-mobile-support-contact">
+        <button type="button" onClick={() => setNotice("Aahaa Support chat is ready to help with your order.")}>
+          <ChatBubbleIcon />Chat with Aahaa Support<PaymentChevronIcon />
+        </button>
+        <button type="button" onClick={() => setNotice("Please keep your order ID handy when contacting support.")}>
+          <PhoneIcon />Call support<PaymentChevronIcon />
+        </button>
+      </div>
+      {notice ? <p className="ck-mobile-support-notice" role="status">{notice}</p> : null}
+      <p className="ck-mobile-support-footnote"><HelpIcon /> Please keep your order ID handy.</p>
+    </section>
+  );
+}
+
+function AboutAahaaPage() {
+  const features = [
+    { title: "Home-cooked meals", description: "Fresh and tasty meals made with care.", icon: <HomeNavIcon /> },
+    { title: "Along your route", description: "Find home cooks at your pickup stops.", icon: <PinIcon /> },
+    { title: "Variety of options", description: "Choose from a wide range of homemade meals.", icon: <LeafIcon /> },
+    { title: "Support local home cooks", description: "Helping home cooks and small kitchens grow.", icon: <PeopleIcon /> },
+  ];
+
+  return (
+    <main className="ck-main ck-profile-main">
+      <AccountSidebar active="about" />
+      <section className="ck-profile-content ck-account-content ck-about-content">
+        <header className="ck-profile-heading">
+          <h1>About Aahaa</h1>
+          <p>A little home, along the way.</p>
+        </header>
+        <section className="ck-about-hero">
+          <div className="ck-about-hero-copy">
+            <strong className="ck-about-wordmark">aahaa<span aria-hidden="true">⌣</span></strong>
+            <h2>Home-cooked meals<br />for your journey.</h2>
+            <p>Aahaa connects travellers with home cooks along the way, so you can enjoy fresh, tasty and homemade meals at your selected pickup stops.</p>
+          </div>
+          <img src={a.imgImage59} alt="A home cook preparing a fresh meal" />
+        </section>
+        <section className="ck-about-mission">
+          <h2>Our mission</h2>
+          <p>To make every journey better by providing easy access to<br className="ck-about-desktop-break" /> healthy, home-cooked meals from local home cooks.</p>
+        </section>
+        <section className="ck-about-features">
+          <h2>What makes aahaa special</h2>
+          <div>
+            {features.map((feature) => (
+              <article key={feature.title}>
+                <span>{feature.icon}</span>
+                <strong>{feature.title}</strong>
+                <p>{feature.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section className="ck-about-vision">
+          <div>
+            <h2>Our vision</h2>
+            <p>To become the most trusted platform for homemade meals for every traveller across India.</p>
+          </div>
+          <img src={a.imgAahaaMealBoxWithCurryTray1} alt="" />
+        </section>
+      </section>
+    </main>
+  );
+}
+
+type LinkedPhone = { number: string; label: string };
+
+function LogoutPage() {
+  const [phones, setPhones] = useState<LinkedPhone[]>([
+    { number: "+91 98765 43210", label: "Primary number" },
+    { number: "+91 91234 56789", label: "Secondary number" },
+  ]);
+  const [addingPhone, setAddingPhone] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+
+  function addPhone(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const number = newPhone.trim();
+    const digits = number.replace(/\D/g, "");
+    if (!/^\+?[0-9 ]{8,20}$/.test(number) || digits.length < 8 || digits.length > 15) {
+      setPhoneError("Enter a valid phone number with 8 to 15 digits.");
+      return;
+    }
+    setPhones((current) => [...current, { number, label: "Secondary number" }]);
+    setNewPhone("");
+    setPhoneError("");
+    setAddingPhone(false);
+  }
+
+  return (
+    <main className="ck-main ck-profile-main">
+      <AccountSidebar active="logout" />
+      <section className="ck-profile-content ck-account-content ck-logout-content">
+        <header className="ck-profile-heading">
+          <h1>Log out</h1>
+          <p>Manage your account and devices.</p>
+        </header>
+        <section className="ck-logout-account-card">
+          <div className="ck-logout-account-person">
+            <span className="ck-logout-avatar"><ProfileIcon /></span>
+            <span><strong>Saran G</strong><small>+91 98765 43210</small></span>
+          </div>
+          <div className="ck-logout-linked">
+            <h2>Linked phones</h2>
+            <p>Manage the phone numbers linked to your aahaa account.</p>
+            <div className="ck-logout-phone-list">
+              {phones.map((phone, index) => (
+                <div className="ck-logout-phone" key={phone.number}>
+                  <span className="ck-logout-phone-icon"><PhoneIcon /></span>
+                  <span className="ck-logout-phone-copy"><strong>{phone.number}</strong><small>{index === 0 ? "Primary number" : phone.label}</small></span>
+                  {index === 0 ? (
+                    <span className="ck-logout-current">Current</span>
+                  ) : (
+                    <button className="ck-logout-remove" type="button" onClick={() => setPhones((current) => current.filter((_, phoneIndex) => phoneIndex !== index))}>
+                      <TrashIcon />Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {addingPhone ? (
+              <form className="ck-logout-add-form" onSubmit={addPhone}>
+                <label htmlFor="ck-new-linked-phone">Phone number</label>
+                <div>
+                  <input
+                    id="ck-new-linked-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    pattern="[+0-9 ]{8,20}"
+                    value={newPhone}
+                    onChange={(event) => { setNewPhone(event.target.value); setPhoneError(""); }}
+                    required
+                    placeholder="+91 98765 43210"
+                    aria-invalid={Boolean(phoneError)}
+                    aria-describedby={phoneError ? "ck-new-linked-phone-error" : undefined}
+                  />
+                  <button type="submit">Add number</button>
+                  <button type="button" onClick={() => { setAddingPhone(false); setNewPhone(""); setPhoneError(""); }}>Cancel</button>
+                </div>
+                {phoneError ? <small id="ck-new-linked-phone-error" role="alert">{phoneError}</small> : null}
+              </form>
+            ) : (
+              <button className="ck-logout-add-phone" type="button" onClick={() => setAddingPhone(true)}>
+                <span>+</span>Add another number
+              </button>
+            )}
+          </div>
+        </section>
+        <section className="ck-logout-action-card">
+          <span className="ck-settings-icon"><LogoutIcon /></span>
+          <span><strong>Log out</strong><small>You will be signed out from this device. Your account and saved data<br className="ck-about-desktop-break" /> will remain safe.</small></span>
+          <button type="button" onClick={() => navigate(PATHS.home)}>Log out</button>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function NotificationIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.8 12h16.4M12 3.5c2.2 2.4 3.2 5.2 3.2 8.5s-1 6.1-3.2 8.5c-2.2-2.4-3.2-5.2-3.2-8.5s1-6.1 3.2-8.5Z" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m9.5 3 .5 2a7 7 0 0 1 4 0l.5-2 2.4 1-.7 2a7 7 0 0 1 2.8 2.8l2-.7 1 2.4-2 .5a7 7 0 0 1 0 4l2 .5-1 2.4-2-.7a7 7 0 0 1-2.8 2.8l.7 2-2.4 1-.5-2a7 7 0 0 1-4 0l-.5 2-2.4-1 .7-2A7 7 0 0 1 5 16l-2 .7-1-2.4 2-.5a7 7 0 0 1 0-4l-2-.5 1-2.4 2 .7a7 7 0 0 1 2.8-2.8l-.7-2L9.5 3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 11v5m0-8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5m5-4 4-4-4-4m4 4H9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 6h3l1.2-2h5.6L14 6h3v10H3V6Z" fill="currentColor" />
+      <circle cx="10" cy="10.5" r="2.8" fill="#fff" />
+      <circle cx="10" cy="10.5" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function EmailIcon() {
+  return (
+    <svg viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <rect x="3" y="5" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="m4 6 7 6 7-6" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -1914,6 +4616,22 @@ function PinIcon() {
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path d="M9 16s5.5-4.6 5.5-8.4A5.5 5.5 0 0 0 3.5 7.6C3.5 11.4 9 16 9 16Z" stroke="currentColor" strokeWidth="1.4" />
       <circle cx="9" cy="7.4" r="1.7" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M5.2 2.8h2.1l1 3-1.6 1.5a11 11 0 0 0 4 4l1.5-1.6 3 1v2.1c0 1-.8 1.8-1.8 1.8A11.4 11.4 0 0 1 3.4 4.6c0-1 .8-1.8 1.8-1.8Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M9 2.5v8m0 0 3-3m-3 3-3-3M3.5 12.5v2h11v-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -1953,14 +4671,6 @@ function BusIcon() {
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
       <rect x="3" y="5" width="16" height="10" rx="2.5" stroke="#ff4b2b" strokeWidth="1.4" />
       <path d="M3 11h16M7 15.5v1.5M15 15.5v1.5" stroke="#ff4b2b" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SwapIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M4 3H11M11 3 9 1M11 3 9 5M10 11H3M3 11 5 9M3 11 5 13" stroke="#ff4b2b" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -2014,6 +4724,49 @@ function ArrowIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
       <path d="M2.5 7h9M8 3.5 11.5 7 8 10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CreditCardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="3" />
+      <path d="M3 10h18M7 15h3" />
+    </svg>
+  );
+}
+
+function BankOutlineIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m3 9 9-6 9 6M5 10h14M6 10v9m4-9v9m4-9v9m4-9v9M3 21h18" />
+    </svg>
+  );
+}
+
+function PaymentChevronIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
+function CloseCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m9 9 6 6m0-6-6 6" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-5.2A7.5 7.5 0 1 1 20 11.5Z" />
+      <path d="M8 11h.01M12 11h.01M16 11h.01" />
     </svg>
   );
 }
@@ -2194,6 +4947,76 @@ function BagIcon() {
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
       <path d="M4.2 6.2h9.6l-.7 8.1H4.9L4.2 6.2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M6.4 6.2V4.8A2.6 2.6 0 0 1 11.6 4.8v1.4" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3.5 4.5h9M6 4.5V3h4v1.5m1.7 0-.5 8H4.8l-.5-8M6.6 7v3.5m2.8-3.5v3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 4.5h14v10H8l-4.5 3v-13Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M6 8h8M6 11h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M10 2.5 16 5v4.4c0 3.8-2.4 6.3-6 8.1-3.6-1.8-6-4.3-6-8.1V5l6-2.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="m7.5 9.8 1.7 1.7 3.4-3.7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function QrIcon() {
+  return (
+    <svg width="27" height="27" viewBox="0 0 27 27" fill="none" aria-hidden="true">
+      <path d="M3 3h8v8H3zM16 3h8v8h-8zM3 16h8v8H3z" stroke="currentColor" strokeWidth="2" />
+      <path d="M6 6h2v2H6zM19 6h2v2h-2zM6 19h2v2H6zM16 16h3v3h-3zM22 16v3h-3M22 22h2M16 22v2M22 19v3" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HeadsetIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+      <path d="M4.5 15v-2a9.5 9.5 0 0 1 19 0v2M4.5 14.5H8v7H6a1.5 1.5 0 0 1-1.5-1.5v-5.5ZM23.5 14.5H20v7h2a1.5 1.5 0 0 0 1.5-1.5v-5.5ZM20 21c-1 2-3 3-6 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="m4 9.2 3.2 3.1L14 5.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BoxIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="m9 2.5 6 3.2v6.6l-6 3.2-6-3.2V5.7l6-3.2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="m3.3 5.8 5.7 3 5.7-3M9 8.8v6.5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function DeliveryIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M2 4.5h9v8H2zM11 7h3l2 2.2v3.3h-5V7Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <circle cx="5" cy="13.5" r="1.5" fill="currentColor" />
+      <circle cx="13.5" cy="13.5" r="1.5" fill="currentColor" />
     </svg>
   );
 }

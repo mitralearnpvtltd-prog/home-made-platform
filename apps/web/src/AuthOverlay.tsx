@@ -25,6 +25,7 @@ export function AuthOverlay({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [loginAttempted, setLoginAttempted] = useState(false);
   const [registerAttempted, setRegisterAttempted] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState(false);
@@ -77,6 +78,7 @@ export function AuthOverlay({
   const title = screen === "register" ? "Create account" : "Log in";
   const nameOk = name.trim().length > 1;
   const phoneOk = phone.replace(/\D/g, "").length === 10;
+  const loginOk = phoneOk;
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const registerOk = nameOk && phoneOk && emailOk;
 
@@ -131,10 +133,13 @@ export function AuthOverlay({
             className="lp-login-form"
             onSubmit={(event) => {
               event.preventDefault();
+              setLoginAttempted(true);
+              if (!loginOk) return;
               navigate(PATHS.otp);
             }}
           >
-            <PhoneField phone={phone} setPhone={setPhone} autoFocus />
+            <PhoneField phone={phone} setPhone={setPhone} autoFocus invalid={loginAttempted && !phoneOk} onChange={() => setLoginAttempted(false)} />
+            {loginAttempted && !phoneOk ? <p className="lp-register-field-error">Enter a 10-digit mobile number.</p> : null}
             <p className="lp-login-hint">We&apos;ll send a 6-digit OTP to your mobile number.</p>
             <button className="lp-login-otp" type="submit">
               Send OTP
@@ -474,12 +479,14 @@ function PhoneField({
   autoFocus,
   leadingIcon,
   invalid,
+  onChange,
 }: {
   phone: string;
   setPhone: (value: string) => void;
   autoFocus?: boolean;
   leadingIcon?: boolean;
   invalid?: boolean;
+  onChange?: () => void;
 }) {
   return (
     <label className={invalid ? "lp-login-field is-invalid" : "lp-login-field"}>
@@ -502,9 +509,14 @@ function PhoneField({
           maxLength={10}
           placeholder="Enter mobile number"
           aria-label="Mobile number"
+          aria-invalid={invalid || undefined}
           value={phone}
           autoFocus={autoFocus}
-          onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+          onChange={(event) => {
+            const nextValue = event.target.value.replace(/\D/g, "").slice(0, 10);
+            setPhone(nextValue);
+            onChange?.();
+          }}
         />
       </span>
     </label>

@@ -1358,7 +1358,7 @@ function FigmaMobileLanding() {
     const page = document.querySelector<HTMLElement>(".mlp-page");
     const shell = document.querySelector<HTMLElement>(".mlp-scale");
     const apply = () => {
-      const vw = window.innerWidth;
+      const vw = document.documentElement.clientWidth;
       const scale = vw <= 500 ? vw / 390 : 1;
       if (page) {
         page.style.transform = `scale(${scale})`;
