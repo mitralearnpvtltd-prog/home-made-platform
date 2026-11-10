@@ -8,12 +8,14 @@
 
 html {
   font-family: var(--font-family);
+  font-size: 16px;
   color: var(--color-text);
   background: var(--color-surface-page);
 }
 
 body {
   margin: 0;
+  font-family: var(--font-family);
   font-size: var(--text-body);
   line-height: var(--leading-body);
   font-weight: var(--weight-regular);
@@ -32,8 +34,12 @@ body {
 }
 
 button,
-input {
-  font: inherit;
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 :focus-visible {

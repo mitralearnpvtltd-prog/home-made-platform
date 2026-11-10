@@ -263,7 +263,7 @@ function LaceStoryCard() {
             <img src={a.imgEllipse1712} alt="" style={{ position: "absolute", left: "51.25%", top: "41.74%", width: 44, height: 52 }} />
           </div>
         </div>
-        <span style={{ position: "absolute", left: 0, top: 34, width: 135, fontFamily: '"Baloo 2", "Plus Jakarta Sans", sans-serif', fontWeight: 600, fontSize: 51, lineHeight: 1.09, color: "#fd451a", textAlign: "center" }}>aahaa</span>
+        <span style={{ position: "absolute", left: 0, top: 34, width: 135, fontFamily: '"Plus Jakarta Sans", "Segoe UI", sans-serif', fontWeight: 600, fontSize: 51, lineHeight: 1.09, color: "#fd451a", textAlign: "center" }}>aahaa</span>
       </div>
       <div className="lp-abs" style={{ left: 870, top: 226, width: 125, height: 12, overflow: "hidden" }}>
         <img src={a.imgMinimalistOrangeFloralDivider1} alt="" loading="lazy" decoding="async" style={{ position: "absolute", left: "-0.29%", top: "-131.25%", width: "100.58%", height: "362.5%", maxWidth: "none" }} />
@@ -636,7 +636,7 @@ function DesktopLanding({
             <img src={a.imgVector2704} width={49} height={2} alt="" />
           </div>
           <h2 style={{ margin: "12px 0 0", fontSize: 54, fontWeight: 600, color: "#1b513f", letterSpacing: -1.62, lineHeight: 1.09 }}>Home - cooked comfort.</h2>
-          <p style={{ margin: 8, fontFamily: '"Nothing You Could Do", cursive', fontSize: 54, color: "#603811", lineHeight: 1.09 }}>Four simple steps.</p>
+          <p style={{ margin: 8, fontFamily: '"Plus Jakarta Sans", "Segoe UI", sans-serif', fontSize: 54, color: "#603811", lineHeight: 1.09 }}>Four simple steps.</p>
         </div>
         <img className="lp-abs" src={a.imgChatGptImageOct102026031608Pm1} alt="" loading="lazy" decoding="async" style={{ left: 222, top: 188, width: 922, height: 615 }} />
         <img className="lp-abs lp-motion-bus-road" src={a.imgRetroOrangeCreamBusSticker1} alt="" loading="lazy" decoding="async" />
@@ -951,7 +951,7 @@ export function MobileLanding({
       <section data-section="how">
         <p className="lp-section-label">HOW IT WORKS</p>
         <h2 style={{ color: "#1b513f" }}>Home - cooked comfort.</h2>
-        <p style={{ fontFamily: '"Nothing You Could Do", cursive', fontSize: 32, color: "#603811" }}>Four simple steps.</p>
+        <p style={{ fontFamily: '"Plus Jakarta Sans", "Segoe UI", sans-serif', fontSize: 32, color: "#603811" }}>Four simple steps.</p>
         <img className="full" src={a.imgChatGptImageOct102026031608Pm1} alt="" />
         <div className="lp-steps">
           <MobileStep n="01" title="Plan your journey" body="Choose your start, destination and pickup stop." />
@@ -1563,7 +1563,7 @@ function FigmaMobileLanding() {
           </div>
           <p style={{ margin: 0, width: 173, color: "#1b513f", fontSize: 18, fontWeight: 600, letterSpacing: -0.54, lineHeight: 1.09, textAlign: "center" }}>Home - cooked comfort.</p>
         </div>
-        <p style={{ margin: 0, width: "100%", color: "#603811", fontFamily: '"Nothing You Could Do", "Plus Jakarta Sans", cursive', fontSize: 16, letterSpacing: -0.48, lineHeight: 1.09, textAlign: "center" }}>Four simple steps.</p>
+        <p style={{ margin: 0, width: "100%", color: "#603811", fontFamily: '"Plus Jakarta Sans", "Segoe UI", sans-serif', fontSize: 16, letterSpacing: -0.48, lineHeight: 1.09, textAlign: "center" }}>Four simple steps.</p>
       </div>
 
       <div className="mlp-abs mlp-road-stage" style={{ left: 16, top: Y(1049), width: 358, height: 473 }}>

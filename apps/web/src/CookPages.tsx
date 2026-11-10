@@ -415,7 +415,6 @@ function JourneyBar({
   setPanel: (panel: JourneyPanel) => void;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
-  const stop = pickupMeta(journey.pickup);
   const [viewMonth, setViewMonth] = useState(() => new Date(journey.date.getFullYear(), journey.date.getMonth(), 1));
 
   useEffect(() => {
@@ -580,14 +579,6 @@ function JourneyBar({
 
       <span className="ck-journey-rule ck-journey-rule--2" aria-hidden="true" />
 
-      <div className="ck-journey-field ck-journey-time">
-        <BarClockIcon />
-        <span>
-          <small>Pickup time</small>
-          <strong>{stop.time}</strong>
-        </span>
-      </div>
-
       <button className="ck-edit-journey" type="button" onClick={() => navigate(PATHS.editJourney)}>
         <PencilIcon />
         <span className="ck-edit-label-desk">Edit journey</span>
@@ -699,7 +690,7 @@ function CookListing({
             <span>
               <PeopleIcon />4 home cooks
             </span>
-            <span>
+            <span className="ck-stat-veg">
               <StatLeafIcon />8 veg meals
             </span>
             <span>
@@ -941,7 +932,13 @@ function LakshmiMenu({
       </div>
 
       <section className="ck-kitchen-head">
-        <img src={cookLakshmiMenu} alt="" />
+        <div className="ck-kitchen-photo">
+          <img src={cookLakshmiMenu} alt="" />
+          <span className="ck-kitchen-verified">
+            <CheckIcon />
+            Verified
+          </span>
+        </div>
         <div>
           <h1>
             Lakshmi’s Kitchen
@@ -959,13 +956,6 @@ function LakshmiMenu({
             <StarIcon />
             <span className="ck-rating-desk">4.8 · 126 reviews</span>
             <span className="ck-rating-m">4.8 ( 120+ )</span>
-          </p>
-          <p className="ck-from">
-            <TiffinIcon />
-            <span>
-              Meals from
-              <strong>{formatRupees(60)}</strong>
-            </span>
           </p>
         </div>
         <aside className="ck-pickup-card">
@@ -2605,16 +2595,7 @@ function LemonRiceDetail({
 
   return (
     <main className="ck-main ck-main--meal">
-      <div className="ck-crumbs">
-        <button type="button" onClick={() => navigate(PATHS.cooks)}>
-          Home cooks
-        </button>
-        <span>/</span>
-        <button type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>
-          Lakshmi’s Kitchen
-        </button>
-        <span>/</span>
-        <strong className="ck-crumb-current">Lemon rice & potato fry</strong>
+      <div className="ck-crumbs ck-crumbs--meal">
         <button className="ck-back" type="button" onClick={() => navigate(PATHS.lakshmiMenu)}>
           ← Back to menu
         </button>
@@ -2622,7 +2603,9 @@ function LemonRiceDetail({
 
       <section className="ck-meal-detail">
         <div className="ck-meal-gallery">
-          <img className="ck-meal-hero" src={gallery[activeThumb]} alt="" />
+          <div className="ck-meal-hero-wrap">
+            <img className="ck-meal-hero" src={gallery[activeThumb]} alt="" />
+          </div>
           <div className="ck-meal-thumbs">
             {thumbs.map((src, index) => (
               <button

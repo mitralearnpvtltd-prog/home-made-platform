@@ -12,7 +12,8 @@ body,
 .lp-root {
   background: #fef9f3;
   color: #290600;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
+  font-size: var(--text-body);
 }
 
 .lp-desktop {
@@ -72,7 +73,7 @@ body,
   left: 0;
   top: 24px;
   width: 96px;
-  font-family: "Baloo 2", "Plus Jakarta Sans", sans-serif;
+  font-family: var(--font-family);
   font-weight: 600;
   font-size: 36px;
   line-height: 1.09;
@@ -115,7 +116,7 @@ body,
 }
 
 .lp-nav a {
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: var(--font-family);
   font-weight: 500;
   font-size: 16px;
   line-height: 1.61;
@@ -143,7 +144,7 @@ body,
   border: 0;
   border-radius: 12px;
   padding: 12px 54px;
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: var(--font-family);
   font-weight: 500;
   font-size: 16px;
   line-height: 1.61;
@@ -167,7 +168,7 @@ body,
 }
 
 .lp-hero-title {
-  font-family: Playfair, "Playfair Display", Georgia, serif;
+  font-family: var(--font-family);
   font-weight: 500;
   font-size: 64px;
   line-height: 1.09;
@@ -308,7 +309,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: 16px;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
 }
 
 .lp-sheet--city {
@@ -776,7 +777,7 @@ body,
   }
 
   .lp-mobile h1 {
-    font-family: Playfair, "Playfair Display", Georgia, serif;
+    font-family: var(--font-family);
     font-weight: 500;
     font-size: 36px;
     line-height: 1.1;
@@ -1206,7 +1207,7 @@ body,
   overflow: hidden;
   background: #fdf9f3;
   color: #290600;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   transform-origin: top left;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -1255,7 +1256,7 @@ body,
   left: 0;
   top: 12.08px;
   width: 49px;
-  font-family: "Baloo 2", "Plus Jakarta Sans", sans-serif;
+  font-family: var(--font-family);
   font-weight: 600;
   font-size: 18.183px;
   line-height: 1.09;
@@ -1303,7 +1304,7 @@ body,
   border-radius: 8px;
   background: #ff4b2b;
   color: #fff;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-size: 14px;
   font-weight: 400;
   line-height: normal;
@@ -1342,7 +1343,7 @@ body,
   border-radius: 8px;
   background: #ff4b2b;
   color: #fff;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-size: 14px;
   font-weight: 400;
   cursor: default;
@@ -1488,7 +1489,7 @@ body,
   border-radius: 8px;
   background: #ff4b2b;
   color: #fff;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-size: 14px;
   font-weight: 400;
   cursor: default;
@@ -2045,7 +2046,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: 16px;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
 }
 
 .mlp-sheet h2 {
@@ -2579,7 +2580,7 @@ body,
   scrollbar-width: none;
   background: #fffdfa;
   color: #361b12;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
 }
 
 .lp-login-panel::-webkit-scrollbar {
@@ -2617,7 +2618,7 @@ body,
 .lp-login-title {
   margin: 8px 0 0;
   color: #361b12;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-size: 36px;
   font-weight: 700;
   line-height: 1.15;
@@ -2796,7 +2797,7 @@ body,
 .lp-otp-title {
   margin: 28px 0 0;
   color: #361b12;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-size: 32px;
   font-weight: 700;
   line-height: 1.2;
@@ -2934,13 +2935,13 @@ body,
   padding: 48px 32px;
   background: #fffdfa;
   color: #361b12;
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: var(--font-family);
 }
 
 .lp-placeholder-brand {
   margin: 0 0 24px;
   color: #fd451a;
-  font-family: "Baloo 2", "Plus Jakarta Sans", sans-serif;
+  font-family: var(--font-family);
   font-size: 36px;
   font-weight: 600;
   line-height: 1.09;
@@ -3106,7 +3107,7 @@ body,
     width: max-content;
     margin: 12px 0 0;
     color: #fd451a;
-    font-family: "Baloo 2", "Plus Jakarta Sans", sans-serif;
+    font-family: var(--font-family);
     font-size: 36px;
     font-weight: 600;
     line-height: 1.09;
@@ -3134,7 +3135,7 @@ body,
   .lp-register-mobile-title {
     margin: 0;
     color: #361b12;
-    font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+    font-family: var(--font-family);
     font-size: 26px;
     font-weight: 700;
     line-height: 1.2;

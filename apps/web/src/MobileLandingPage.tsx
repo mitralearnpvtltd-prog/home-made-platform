@@ -375,7 +375,7 @@ export function MobileLandingPage() {
           </div>
           <p style={{ margin: 0, width: 173, color: "#1b513f", fontSize: 18, fontWeight: 600, letterSpacing: -0.54, lineHeight: 1.09, textAlign: "center" }}>Home - cooked comfort.</p>
         </div>
-        <p style={{ margin: 0, width: "100%", color: "#603811", fontFamily: '"Nothing You Could Do", "Plus Jakarta Sans", cursive', fontSize: 16, letterSpacing: -0.48, lineHeight: 1.09, textAlign: "center" }}>Four simple steps.</p>
+        <p style={{ margin: 0, width: "100%", color: "#603811", fontFamily: '"Plus Jakarta Sans", "Segoe UI", sans-serif', fontSize: 16, letterSpacing: -0.48, lineHeight: 1.09, textAlign: "center" }}>Four simple steps.</p>
       </div>
 
       <div className="mlp-abs mlp-road-stage" style={{ left: 16, top: Y(1049), width: 358, height: 473 }}>
