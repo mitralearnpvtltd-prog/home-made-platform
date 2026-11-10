@@ -2681,6 +2681,16 @@
     grid-area: date;
   }
 
+  .ck-journey-dd--date .ck-dd,
+  .ck-journey-dd--wide .ck-dd {
+    left: auto;
+    right: 0;
+    min-width: 0;
+    width: min(280px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+  }
+
   .ck-edit-journey {
     grid-area: edit;
     margin-left: 0;

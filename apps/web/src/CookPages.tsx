@@ -160,7 +160,7 @@ export function CookPages({ path }: { path: string }) {
 
   return (
     <div className={pageClass}>
-      {paymentMethodPage || paymentStatusPage || orderSummaryPage || notificationsPage || settingsPage ? <MobileStatusBar /> : null}
+      {notificationsPage || settingsPage ? <MobileStatusBar /> : null}
       <CookHeader
         bagCount={onMenu || mealBagPage || reviewOrderPage || confirmPickupPage || paymentMethodPage || paymentStatusPage || invoicePage || orderSummaryPage || trackOrderPage || myOrdersPage ? bagCount : 0}
         hideCart={accountPage && !myOrdersPage}
