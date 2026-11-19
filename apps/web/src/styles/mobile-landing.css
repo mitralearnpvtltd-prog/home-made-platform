@@ -483,14 +483,22 @@
 }
 
 .mlp-suggest {
-  z-index: 20;
+  z-index: 60;
   width: 358px;
+  max-width: 358px;
   max-height: 280px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
   background: #fefefe;
   border-radius: 0 0 12px 12px;
   box-shadow: 0 8px 24px rgb(66 20 6 / 10%);
+}
+
+.mlp-suggest--from,
+.mlp-suggest--to {
+  left: 16px;
+  right: auto;
 }
 
 .mlp-overlay {

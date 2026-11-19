@@ -1,17 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import * as a from "./assets/landing";
+import { ApiError, loginAccount, registerAccount, sendAuthOtp } from "./lib/api";
+import { clearAuthReturnPath, persistAuth } from "./lib/authSession";
 import { navigate, PATHS } from "./navigation";
+
+function navigateAfterCustomerLogin() {
+  // Customer login never enters the admin dashboard — admin uses /admin/login.
+  clearAuthReturnPath();
+  navigate(PATHS.cooks);
+}
 
 type AuthScreen = "login" | "register" | "otp" | "register-otp" | "register-success";
 
-/** Preview-only mock code. Never treated as a real SMS OTP. */
-const DEV_OTP = "123456";
+const OTP_DIGITS = 4;
+const OTP_RESEND_SECONDS = 60;
 
 function formatOtpPhone(phone: string) {
   const digits = phone.replace(/\D/g, "").slice(0, 10);
   if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
   if (digits.length) return `+91 ${digits}`;
   return "+91";
+}
+
+function emptyOtp(): string[] {
+  return Array.from({ length: OTP_DIGITS }, () => "");
 }
 
 export function AuthOverlay({
@@ -23,13 +35,17 @@ export function AuthOverlay({
   phone: string;
   setPhone: (value: string) => void;
 }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(() => sessionStorage.getItem("aahaa.register.name") ?? "");
+  const [email, setEmail] = useState(() => sessionStorage.getItem("aahaa.register.email") ?? "");
   const [loginAttempted, setLoginAttempted] = useState(false);
   const [registerAttempted, setRegisterAttempted] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState(emptyOtp);
   const [otpError, setOtpError] = useState(false);
-  const [otpSeconds, setOtpSeconds] = useState(30);
+  const [otpMessage, setOtpMessage] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [otpSeconds, setOtpSeconds] = useState(OTP_RESEND_SECONDS);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 767px)").matches);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   const isRegisterOtp = screen === "register-otp";
@@ -62,9 +78,11 @@ export function AuthOverlay({
 
   useEffect(() => {
     if (screen !== "otp" && screen !== "register-otp") return;
-    setOtp(["", "", "", "", "", ""]);
+    setOtp(emptyOtp());
     setOtpError(false);
-    setOtpSeconds(30);
+    setOtpMessage("");
+    setAuthBusy(false);
+    setOtpSeconds(OTP_RESEND_SECONDS);
   }, [screen]);
 
   useEffect(() => {
@@ -134,15 +152,36 @@ export function AuthOverlay({
             onSubmit={(event) => {
               event.preventDefault();
               setLoginAttempted(true);
-              if (!loginOk) return;
-              navigate(PATHS.otp);
+              setSendError("");
+              if (!loginOk || sendBusy) return;
+              void (async () => {
+                setSendBusy(true);
+                try {
+                  await sendAuthOtp({
+                    phone: phone.replace(/\D/g, "").slice(0, 10),
+                    purpose: "login",
+                  });
+                  navigate(PATHS.otp);
+                } catch (error) {
+                  setSendError(
+                    error instanceof ApiError
+                      ? error.message
+                      : error instanceof Error
+                        ? error.message
+                        : "Unable to send OTP. Please try again.",
+                  );
+                } finally {
+                  setSendBusy(false);
+                }
+              })();
             }}
           >
-            <PhoneField phone={phone} setPhone={setPhone} autoFocus invalid={loginAttempted && !phoneOk} onChange={() => setLoginAttempted(false)} />
+            <PhoneField phone={phone} setPhone={setPhone} autoFocus invalid={loginAttempted && !phoneOk} onChange={() => { setLoginAttempted(false); setSendError(""); }} />
             {loginAttempted && !phoneOk ? <p className="lp-register-field-error">Enter a 10-digit mobile number.</p> : null}
-            <p className="lp-login-hint">We&apos;ll send a 6-digit OTP to your mobile number.</p>
-            <button className="lp-login-otp" type="submit">
-              Send OTP
+            {sendError ? <p className="lp-register-field-error" role="alert">{sendError}</p> : null}
+            <p className="lp-login-hint">We&apos;ll send a 4-digit OTP to your mobile number.</p>
+            <button className="lp-login-otp" type="submit" disabled={sendBusy}>
+              {sendBusy ? "Sending OTP…" : "Send OTP"}
             </button>
             <LegalLinks />
           </form>
@@ -154,8 +193,33 @@ export function AuthOverlay({
             onSubmit={(event) => {
               event.preventDefault();
               setRegisterAttempted(true);
-              if (!registerOk) return;
-              navigate(PATHS.registerOtp);
+              setSendError("");
+              if (!registerOk || sendBusy) return;
+              void (async () => {
+                setSendBusy(true);
+                try {
+                  const phone10 = phone.replace(/\D/g, "").slice(0, 10);
+                  await sendAuthOtp({
+                    phone: phone10,
+                    purpose: "register",
+                    fullName: name.trim(),
+                    email: email.trim(),
+                  });
+                  sessionStorage.setItem("aahaa.register.name", name.trim());
+                  sessionStorage.setItem("aahaa.register.email", email.trim());
+                  navigate(PATHS.registerOtp);
+                } catch (error) {
+                  setSendError(
+                    error instanceof ApiError
+                      ? error.message
+                      : error instanceof Error
+                        ? error.message
+                        : "Unable to send OTP. Please try again.",
+                  );
+                } finally {
+                  setSendBusy(false);
+                }
+              })();
             }}
           >
             <div className="lp-register-mobile-head">
@@ -196,7 +260,7 @@ export function AuthOverlay({
             </div>
             {registerAttempted && !phoneOk ? <p className="lp-register-field-error">Enter a 10-digit mobile number.</p> : null}
 
-            <p className="lp-login-hint lp-register-mobile-phone-hint">We&apos;ll send a 6-digit OTP to this number.</p>
+            <p className="lp-login-hint lp-register-mobile-phone-hint">We&apos;ll send a 4-digit OTP to this number.</p>
 
             <label className={registerAttempted && !emailOk ? "lp-login-field is-invalid" : "lp-login-field"}>
               <span className="lp-login-field-label lp-register-desktop-only">Email ID</span>
@@ -216,9 +280,10 @@ export function AuthOverlay({
             {registerAttempted && !emailOk ? <p className="lp-register-field-error">Enter a valid email address.</p> : null}
 
             <p className="lp-login-hint lp-register-desktop-hint">OTP will be sent only to your mobile number.</p>
-            <button className="lp-login-otp lp-register-submit" type="submit">
-              <span className="lp-register-desktop-cta">Send OTP</span>
-              <span className="lp-register-mobile-cta">Continue</span>
+            {sendError ? <p className="lp-register-field-error" role="alert">{sendError}</p> : null}
+            <button className="lp-login-otp lp-register-submit" type="submit" disabled={sendBusy}>
+              <span className="lp-register-desktop-cta">{sendBusy ? "Sending OTP…" : "Send OTP"}</span>
+              <span className="lp-register-mobile-cta">{sendBusy ? "Sending…" : "Continue"}</span>
             </button>
             <p className="lp-login-legal lp-register-legal">
               <span className="lp-register-desktop-only">
@@ -245,19 +310,62 @@ export function AuthOverlay({
             className={isRegisterOtp ? "lp-otp lp-register-otp" : "lp-otp"}
             onSubmit={(event) => {
               event.preventDefault();
+              if (authBusy) return;
               if (otpError) {
-                setOtp(["", "", "", "", "", ""]);
+                setOtp(emptyOtp());
                 setOtpError(false);
-                setOtpSeconds(30);
+                setOtpMessage("");
                 otpRefs.current[0]?.focus();
                 return;
               }
-              if (otp.join("") === DEV_OTP) {
-                setOtpError(false);
-                navigate(isRegisterOtp ? PATHS.registerSuccess : PATHS.cooks);
+              const code = otp.join("");
+              if (code.length !== OTP_DIGITS) {
+                setOtpError(true);
+                setOtpMessage("Enter the 4-digit OTP sent to your mobile number.");
                 return;
               }
-              setOtpError(true);
+
+              void (async () => {
+                setAuthBusy(true);
+                setOtpError(false);
+                setOtpMessage("");
+                try {
+                  if (isRegisterOtp) {
+                    if (!registerOk) {
+                      throw new Error("Enter your name, mobile number, and email before verifying.");
+                    }
+                    const result = await registerAccount({
+                      fullName: name.trim(),
+                      phone: phone.replace(/\D/g, "").slice(0, 10),
+                      email: email.trim(),
+                      otp: code,
+                    });
+                    persistAuth(result);
+                    sessionStorage.removeItem("aahaa.register.name");
+                    sessionStorage.removeItem("aahaa.register.email");
+                    navigate(PATHS.registerSuccess);
+                    return;
+                  }
+
+                  const result = await loginAccount({
+                    phone: phone.replace(/\D/g, "").slice(0, 10),
+                    otp: code,
+                  });
+                  persistAuth(result);
+                  navigateAfterCustomerLogin();
+                } catch (error) {
+                  const message =
+                    error instanceof ApiError
+                      ? error.message
+                      : error instanceof Error
+                        ? error.message
+                        : "Unable to verify OTP. Please try again.";
+                  setOtpError(true);
+                  setOtpMessage(message);
+                } finally {
+                  setAuthBusy(false);
+                }
+              })();
             }}
           >
             {isRegisterOtp ? (
@@ -291,7 +399,7 @@ export function AuthOverlay({
               </h2>
             )}
             <p className="lp-otp-lead">
-              Enter the 6-digit OTP sent by SMS to
+              Enter the 4-digit OTP sent by SMS to
               <br />
               <strong>{formatOtpPhone(phone)}</strong>
             </p>
@@ -309,7 +417,7 @@ export function AuthOverlay({
                   type="text"
                   inputMode="numeric"
                   autoComplete={index === 0 ? "one-time-code" : "off"}
-                  maxLength={6}
+                  maxLength={OTP_DIGITS}
                   aria-label={`OTP digit ${index + 1}`}
                   aria-invalid={otpError || undefined}
                   value={digit}
@@ -327,13 +435,13 @@ export function AuthOverlay({
                     if (otp[index] && raw.startsWith(otp[index]) && raw.length > 1) {
                       raw = raw.slice(otp[index].length);
                     }
-                    const chars = raw.slice(0, 6 - index).split("");
+                    const chars = raw.slice(0, OTP_DIGITS - index).split("");
                     chars.forEach((value, offset) => {
                       digits[index + offset] = value;
                     });
                     setOtp(digits);
                     setOtpError(false);
-                    otpRefs.current[Math.min(index + chars.length, 5)]?.focus();
+                    otpRefs.current[Math.min(index + chars.length, OTP_DIGITS - 1)]?.focus();
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== "Backspace") return;
@@ -348,22 +456,26 @@ export function AuthOverlay({
                   }}
                   onPaste={(event) => {
                     event.preventDefault();
-                    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6).split("");
+                    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_DIGITS).split("");
                     if (!pasted.length) return;
-                    const digits = ["", "", "", "", "", ""];
+                    const digits = emptyOtp();
                     pasted.forEach((value, offset) => {
                       digits[offset] = value;
                     });
                     setOtp(digits);
                     setOtpError(false);
-                    otpRefs.current[Math.min(pasted.length, 5)]?.focus();
+                    otpRefs.current[Math.min(pasted.length, OTP_DIGITS - 1)]?.focus();
                   }}
                 />
               ))}
             </div>
-            {otpError ? <p className="lp-otp-error">That OTP isn&apos;t correct. Check the code and try again.</p> : null}
-            <button className="lp-login-otp" type="submit">
-              {isRegisterOtp ? (
+            {otpError ? <p className="lp-otp-error">{otpMessage || "That OTP isn’t correct. Check the code and try again."}</p> : null}
+            <button className="lp-login-otp" type="submit" disabled={authBusy}>
+              {authBusy
+                ? isRegisterOtp
+                  ? "Creating account…"
+                  : "Signing in…"
+                : isRegisterOtp ? (
                 <>
                   <span className="lp-register-desktop-cta">Verify & create account</span>
                   <span className="lp-register-mobile-cta">Verify & Continue</span>
@@ -377,12 +489,46 @@ export function AuthOverlay({
                 Didn&apos;t receive it?{" "}
                 <button
                   type="button"
+                  disabled={sendBusy}
                   onClick={() => {
-                    setOtpError(false);
-                    setOtpSeconds(30);
+                    void (async () => {
+                      setSendBusy(true);
+                      setOtpError(false);
+                      setOtpMessage("");
+                      try {
+                        const phone10 = phone.replace(/\D/g, "").slice(0, 10);
+                        if (isRegisterOtp) {
+                          await sendAuthOtp({
+                            phone: phone10,
+                            purpose: "register",
+                            fullName: name.trim(),
+                            email: email.trim(),
+                          });
+                        } else {
+                          await sendAuthOtp({
+                            phone: phone10,
+                            purpose: "login",
+                          });
+                        }
+                        setOtp(emptyOtp());
+                        setOtpSeconds(OTP_RESEND_SECONDS);
+                        otpRefs.current[0]?.focus();
+                      } catch (error) {
+                        setOtpError(true);
+                        setOtpMessage(
+                          error instanceof ApiError
+                            ? error.message
+                            : error instanceof Error
+                              ? error.message
+                              : "Unable to resend OTP. Please try again.",
+                        );
+                      } finally {
+                        setSendBusy(false);
+                      }
+                    })();
                   }}
                 >
-                  Resend OTP
+                  {sendBusy ? "Sending…" : "Resend OTP"}
                 </button>
               </p>
             ) : (

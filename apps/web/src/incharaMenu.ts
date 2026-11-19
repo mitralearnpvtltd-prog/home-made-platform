@@ -1,0 +1,91 @@
+import type { Meal } from "./cookData";
+
+/**
+ * Inchara’s Kitchen catalogue.
+ * Dish photos are applied via `INCHARA_FOOD_IMAGE_URLS` (`food-images` bucket).
+ * Leave `photo` empty here as the fallback when a URL is not set.
+ */
+export const INCHARA_MEALS: Meal[] = [
+  {
+    id: "inchara-vegetable-khichdi",
+    name: "Vegetable khichdi",
+    description: "Rice with fresh vegetables",
+    price: 100,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "inchara-bisibelebath",
+    name: "Bisibelebath",
+    description: "Spicy lentil rice",
+    price: 70,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "inchara-chapati-vegetable-curry",
+    name: "Chapati & vegetable curry",
+    description: "Smooth rice with curry",
+    price: 80,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "inchara-sambar-rice-meal",
+    name: "Sambar rice meal",
+    description: "Traditional rice and sambar",
+    price: 70,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "inchara-vegetable-upma",
+    name: "Vegetable upma",
+    description: "Savoury vegetable semolina",
+    price: 70,
+    rating: 4.8,
+    reviews: 0,
+    category: "breakfast",
+    photo: "",
+  },
+  {
+    id: "inchara-rava-idli",
+    name: "Rava idli",
+    description: "Soft steamed idli",
+    price: 90,
+    rating: 4.8,
+    reviews: 0,
+    category: "breakfast",
+    photo: "",
+  },
+  {
+    id: "inchara-onion-pakoda",
+    name: "Onion pakoda",
+    description: "100g",
+    price: 90,
+    rating: 4.8,
+    reviews: 0,
+    category: "snacks",
+    photo: "",
+    pack: "100g",
+  },
+  {
+    id: "inchara-masala-makhana",
+    name: "Masala makhana",
+    description: "50g",
+    price: 60,
+    rating: 4.8,
+    reviews: 0,
+    category: "snacks",
+    photo: "",
+    pack: "50g",
+  },
+];

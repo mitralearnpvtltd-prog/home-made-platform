@@ -1,3 +1,5 @@
+import { getAccessToken } from "./authSession";
+
 export type HealthResponse = {
   status: string;
   service: string;
@@ -12,6 +14,8 @@ export type ApiRequestOptions = {
   body?: unknown;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  /** When true, attach the stored bearer access token if present. */
+  auth?: boolean;
 };
 
 export class ApiError extends Error {
@@ -88,11 +92,18 @@ export async function apiRequest<T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, headers, signal } = options;
+  const { method = "GET", body, headers, signal, auth = false } = options;
   const requestHeaders = new Headers(headers);
 
   if (body !== undefined && !requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");
+  }
+
+  if (auth && !requestHeaders.has("Authorization")) {
+    const token = getAccessToken();
+    if (token) {
+      requestHeaders.set("Authorization", `Bearer ${token}`);
+    }
   }
 
   let response: Response;
@@ -131,4 +142,650 @@ export async function apiRequest<T>(
 
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return apiRequest<HealthResponse>("/health", { method: "GET", signal });
+}
+
+export type LocationSearchType = "from_locality" | "to_destination";
+
+export type LocationSearchResult = {
+  id: string;
+  name: string;
+  city: string | null;
+  district: string | null;
+  state: string;
+  location_type: LocationSearchType;
+};
+
+export type SearchLocationsParams = {
+  type: LocationSearchType;
+  q?: string;
+  limit?: number;
+  signal?: AbortSignal;
+};
+
+export function searchLocations(
+  params: SearchLocationsParams,
+): Promise<LocationSearchResult[]> {
+  const search = new URLSearchParams();
+  search.set("type", params.type);
+  if (params.q !== undefined) {
+    search.set("q", params.q);
+  }
+  if (params.limit !== undefined) {
+    search.set("limit", String(params.limit));
+  }
+
+  return apiRequest<LocationSearchResult[]>(`/locations?${search.toString()}`, {
+    method: "GET",
+    signal: params.signal,
+  });
+}
+
+/** Full active catalogue for a location type (From localities or To destinations). */
+export function listLocationCatalogue(
+  type: LocationSearchType,
+  signal?: AbortSignal,
+): Promise<LocationSearchResult[]> {
+  return searchLocations({ type, limit: 200, signal });
+}
+
+export type KitchenListItem = {
+  id: string;
+  cookId: string;
+  name: string;
+  blurb: string | null;
+  offerLabel: string | null;
+  offerType: "meals-snacks" | "snacks" | null;
+  fromPrice: number | null;
+  photoUrl: string | null;
+  hasMenu: boolean;
+  isVerified: boolean;
+  /** null = unknown; do not treat as non-vegetarian */
+  isVegetarian: boolean | null;
+  rating: number | null;
+  reviewCount: number;
+};
+
+export function listKitchens(signal?: AbortSignal): Promise<KitchenListItem[]> {
+  return apiRequest<KitchenListItem[]>("/kitchens", {
+    method: "GET",
+    signal,
+  });
+}
+
+export type DishSpiceLevel = "Mild" | "Medium" | "Hot";
+
+export type KitchenDish = {
+  id: string;
+  kitchenId: string;
+  code: string;
+  name: string;
+  price: number;
+  description: string | null;
+  /** null when the kitchen has not supplied a spice level */
+  spiceLevel: DishSpiceLevel | null;
+  categoryCode: string | null;
+  sortOrder: number;
+  isAvailable: boolean;
+};
+
+export function listKitchenDishes(
+  kitchenId: string,
+  signal?: AbortSignal,
+): Promise<KitchenDish[]> {
+  return apiRequest<KitchenDish[]>(`/kitchens/${kitchenId}/dishes`, {
+    method: "GET",
+    signal,
+  });
+}
+
+export function getKitchenDish(
+  kitchenId: string,
+  code: string,
+  signal?: AbortSignal,
+): Promise<KitchenDish> {
+  return apiRequest<KitchenDish>(
+    `/kitchens/${kitchenId}/dishes/${encodeURIComponent(code)}`,
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export type AuthProfile = {
+  id: string;
+  fullName: string | null;
+  phone: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+};
+
+export type AuthSessionPayload = {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  expiresAt: number | null;
+  tokenType: string;
+};
+
+export type AuthResponse = {
+  profile: AuthProfile;
+  session: AuthSessionPayload;
+};
+
+export type SendOtpResponse = {
+  ok: true;
+  cooldownSeconds: number;
+  expiresInSeconds: number;
+};
+
+export function sendAuthOtp(body: {
+  phone: string;
+  purpose: "login" | "register";
+  fullName?: string;
+  email?: string;
+}): Promise<SendOtpResponse> {
+  return apiRequest<SendOtpResponse>("/auth/otp/send", {
+    method: "POST",
+    body,
+  });
+}
+
+export function registerAccount(body: {
+  fullName: string;
+  phone: string;
+  email: string;
+  otp: string;
+}): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>("/auth/register", {
+    method: "POST",
+    body,
+  });
+}
+
+export function loginAccount(body: {
+  phone: string;
+  otp: string;
+}): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>("/auth/login", {
+    method: "POST",
+    body,
+  });
+}
+
+export function getMyProfile(signal?: AbortSignal): Promise<AuthProfile> {
+  return apiRequest<AuthProfile>("/auth/me", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function updateMyProfile(body: {
+  fullName?: string;
+  phone?: string;
+  email?: string;
+}): Promise<AuthProfile> {
+  return apiRequest<AuthProfile>("/auth/me", {
+    method: "PATCH",
+    auth: true,
+    body,
+  });
+}
+
+export type CartItem = {
+  id: string;
+  dishId: string;
+  dishCode: string;
+  kitchenId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+  categoryCode: string | null;
+  isAvailable: boolean;
+};
+
+export type Cart = {
+  id: string;
+  kitchenId: string | null;
+  status: "active";
+  items: CartItem[];
+  itemCount: number;
+  subtotal: number;
+};
+
+export function getCart(signal?: AbortSignal): Promise<Cart> {
+  return apiRequest<Cart>("/cart", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function addCartItem(body: {
+  kitchenId: string;
+  dishCode: string;
+  quantity?: number;
+}): Promise<Cart> {
+  return apiRequest<Cart>("/cart/items", {
+    method: "POST",
+    auth: true,
+    body,
+  });
+}
+
+export function updateCartItem(
+  itemId: string,
+  body: { quantity: number },
+): Promise<Cart> {
+  return apiRequest<Cart>(`/cart/items/${itemId}`, {
+    method: "PATCH",
+    auth: true,
+    body,
+  });
+}
+
+export function removeCartItem(itemId: string): Promise<Cart> {
+  return apiRequest<Cart>(`/cart/items/${itemId}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export function clearCart(): Promise<Cart> {
+  return apiRequest<Cart>("/cart", {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export type OrderStatus =
+  | "placed"
+  | "confirmed"
+  | "preparing"
+  | "ready_for_pickup"
+  | "completed"
+  | "cancelled";
+
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+export type OrderItem = {
+  id: string;
+  dishId: string | null;
+  dishCode: string;
+  dishName: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+};
+
+export type Order = {
+  id: string;
+  orderNumber: string;
+  kitchenId: string;
+  kitchenName: string | null;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  collectorName: string;
+  collectorPhone: string;
+  collectionPoint: string | null;
+  kitchenNote: string | null;
+  pickupNote: string | null;
+  pickupStopName: string;
+  pickupTime: string | null;
+  journeyFrom: string | null;
+  journeyTo: string | null;
+  journeyDate: string | null;
+  busNumber: string | null;
+  seatNumber: string | null;
+  subtotal: number;
+  pickupServiceFee: number;
+  taxAmount: number;
+  total: number;
+  currency: string;
+  items: OrderItem[];
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrderListItem = {
+  id: string;
+  orderNumber: string;
+  kitchenId: string;
+  kitchenName: string | null;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  total: number;
+  currency: string;
+  itemCount: number;
+  primaryItemName: string | null;
+  items: OrderItem[];
+  journeyDate: string | null;
+  pickupTime: string | null;
+  createdAt: string;
+};
+
+export function createOrder(body: {
+  idempotencyKey: string;
+  collectorName: string;
+  collectorPhone: string;
+  collectionPoint?: string;
+  kitchenNote?: string;
+  pickupNote?: string;
+  pickupStopName: string;
+  pickupTime?: string;
+  journeyFrom: string;
+  journeyTo: string;
+  journeyDate?: string;
+  busNumber?: string;
+  seatNumber?: string;
+  kitchenId?: string;
+}): Promise<Order> {
+  return apiRequest<Order>("/orders", {
+    method: "POST",
+    auth: true,
+    body,
+  });
+}
+
+export function listOrders(signal?: AbortSignal): Promise<OrderListItem[]> {
+  return apiRequest<OrderListItem[]>("/orders", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function getOrder(orderId: string, signal?: AbortSignal): Promise<Order> {
+  return apiRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export type CashfreePaymentSession = {
+  orderId: string;
+  orderNumber: string;
+  amount: number;
+  currency: string;
+  paymentSessionId: string;
+  cashfreeOrderId: string;
+  environment: "sandbox" | "production";
+  paymentStatus: PaymentStatus;
+};
+
+export type CashfreePaymentVerifyResult = {
+  orderId: string;
+  paymentStatus: PaymentStatus;
+  cashfreeOrderId: string | null;
+  cashfreeOrderStatus: string | null;
+  alreadyPaid: boolean;
+  verified: boolean;
+};
+
+export type CashfreePaymentStatusResult = {
+  orderId: string;
+  paymentStatus: PaymentStatus;
+  total: number;
+  currency: string;
+  cashfreeOrderId: string | null;
+  verifiedAt: string | null;
+};
+
+export function createCashfreePaymentSession(orderId: string): Promise<CashfreePaymentSession> {
+  return apiRequest<CashfreePaymentSession>("/payments/cashfree/session", {
+    method: "POST",
+    auth: true,
+    body: { orderId },
+  });
+}
+
+export function verifyCashfreePayment(orderId: string): Promise<CashfreePaymentVerifyResult> {
+  return apiRequest<CashfreePaymentVerifyResult>("/payments/cashfree/verify", {
+    method: "POST",
+    auth: true,
+    body: { orderId },
+  });
+}
+
+export function getCashfreePaymentStatus(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<CashfreePaymentStatusResult> {
+  return apiRequest<CashfreePaymentStatusResult>(
+    `/payments/cashfree/status/${encodeURIComponent(orderId)}`,
+    {
+      method: "GET",
+      auth: true,
+      signal,
+    },
+  );
+}
+
+export function deleteOrder(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<{ deleted: true; orderId: string }> {
+  return apiRequest<{ deleted: true; orderId: string }>(
+    `/orders/${encodeURIComponent(orderId)}`,
+    {
+      method: "DELETE",
+      auth: true,
+      signal,
+    },
+  );
+}
+
+export type ApplicationSubmitResult = {
+  applicationId: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  message: string;
+};
+
+export type ApplicationStatusFilter = "pending" | "approved" | "rejected";
+
+async function apiFormRequest<T>(
+  path: string,
+  formData: FormData,
+  options: { auth?: boolean; signal?: AbortSignal } = {},
+): Promise<T> {
+  const requestHeaders = new Headers();
+  if (options.auth) {
+    const token = getAccessToken();
+    if (token) {
+      requestHeaders.set("Authorization", `Bearer ${token}`);
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method: "POST",
+      headers: requestHeaders,
+      body: formData,
+      signal: options.signal,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network request failed";
+    throw new ApiError(`Unable to reach the API: ${message}`, 0, error);
+  }
+
+  if (!response.ok) {
+    const { message, details } = await parseErrorMessage(response);
+    throw new ApiError(message, response.status, details);
+  }
+
+  return (await response.json()) as T;
+}
+
+export function submitCookApplication(
+  formData: FormData,
+  signal?: AbortSignal,
+): Promise<ApplicationSubmitResult> {
+  return apiFormRequest<ApplicationSubmitResult>("/applications/cook", formData, {
+    signal,
+  });
+}
+
+export function submitDeliveryPartnerApplication(
+  formData: FormData,
+  signal?: AbortSignal,
+): Promise<ApplicationSubmitResult> {
+  return apiFormRequest<ApplicationSubmitResult>(
+    "/applications/delivery-partner",
+    formData,
+    { signal },
+  );
+}
+
+export type AdminCookApplicationListItem = {
+  id: string;
+  application_id: string;
+  status: ApplicationStatusFilter;
+  full_name: string;
+  mobile_number: string;
+  email: string;
+  kitchen_name: string;
+  city: string;
+  food_preference: string;
+  created_at: string;
+  reviewed_at: string | null;
+};
+
+export type AdminDeliveryPartnerListItem = {
+  id: string;
+  applicationId: string;
+  status: ApplicationStatusFilter;
+  fullName: string;
+  mobileNumber: string;
+  email: string;
+  city: string;
+  workPreference: string;
+  createdAt: string;
+  reviewedAt: string | null;
+};
+
+export function listAdminCookApplications(
+  status?: ApplicationStatusFilter,
+  signal?: AbortSignal,
+): Promise<AdminCookApplicationListItem[]> {
+  const search = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<AdminCookApplicationListItem[]>(
+    `/applications/admin/cook${search}`,
+    { method: "GET", auth: true, signal },
+  );
+}
+
+export function listAdminDeliveryPartnerApplications(
+  status?: ApplicationStatusFilter,
+  signal?: AbortSignal,
+): Promise<AdminDeliveryPartnerListItem[]> {
+  const search = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<AdminDeliveryPartnerListItem[]>(
+    `/applications/admin/delivery-partner${search}`,
+    { method: "GET", auth: true, signal },
+  );
+}
+
+export function getAdminCookApplication(id: string, signal?: AbortSignal) {
+  return apiRequest<Record<string, unknown>>(
+    `/applications/admin/cook/${encodeURIComponent(id)}`,
+    { method: "GET", auth: true, signal },
+  );
+}
+
+export function getAdminDeliveryPartnerApplication(id: string, signal?: AbortSignal) {
+  return apiRequest<Record<string, unknown>>(
+    `/applications/admin/delivery-partner/${encodeURIComponent(id)}`,
+    { method: "GET", auth: true, signal },
+  );
+}
+
+export function reviewAdminCookApplication(
+  id: string,
+  body: { status: "approved" | "rejected"; reviewNotes?: string },
+): Promise<{ id: string; applicationId: string; status: string; reviewedAt: string }> {
+  return apiRequest(`/applications/admin/cook/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    auth: true,
+    body,
+  });
+}
+
+export function reviewAdminDeliveryPartnerApplication(
+  id: string,
+  body: { status: "approved" | "rejected"; reviewNotes?: string },
+): Promise<{ id: string; applicationId: string; status: string; reviewedAt: string }> {
+  return apiRequest(`/applications/admin/delivery-partner/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    auth: true,
+    body,
+  });
+}
+
+export type AdminSession = {
+  role: "admin";
+  profile: AuthProfile;
+};
+
+export type AdminDashboard = {
+  generatedAt: string;
+  metrics: {
+    totalOrders: number;
+    todayOrders: number;
+    pendingOrders: number;
+    completedOrders: number;
+    totalRevenue: number;
+    listedKitchens: number;
+    registeredCustomers: number;
+    pendingCookApplications: number;
+    pendingDeliveryApplications: number;
+  };
+  notes: {
+    kitchens: string;
+    customers: string;
+    revenue: string;
+  };
+  salesOverview: Array<{
+    date: string;
+    orderCount: number;
+    revenue: number;
+  }>;
+  recentOrders: Array<{
+    id: string;
+    orderNumber: string;
+    status: string;
+    paymentStatus: string;
+    total: number;
+    collectorName: string;
+    createdAt: string;
+  }>;
+  recentApplications: Array<{
+    id: string;
+    applicationId: string;
+    type: "cook" | "delivery_partner";
+    fullName: string;
+    status: string;
+    createdAt: string;
+  }>;
+};
+
+export function getAdminSession(signal?: AbortSignal): Promise<AdminSession> {
+  return apiRequest<AdminSession>("/admin/session", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function getAdminDashboard(signal?: AbortSignal): Promise<AdminDashboard> {
+  return apiRequest<AdminDashboard>("/admin/dashboard", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
 }

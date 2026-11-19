@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import * as a from "./assets/landing";
+import { FIXED_PICKUP_POINT, isBengaluruPlace, journeyPickName, normalizeJourneySearch } from "./cookData";
+import { useLocationRecents } from "./lib/useLocationRecents";
+import { useLocationSuggest, type LocationSuggestStatus } from "./lib/useLocationSuggest";
 import { navigate, PATHS } from "./navigation";
 import imgAahaaBannerSoftTheme from "./assets/mobile-landing/imgAahaaBannerSoftTheme.png";
 import imgImage111 from "./assets/mobile-landing/imgImage111.png";
@@ -118,14 +121,14 @@ function isFromSelected(fromCity: string, name: string) {
 
 function useJourneySearch() {
   const [panel, setPanel] = useState<JourneyPanel>(null);
-  const [fromCity, setFromCity] = useState("Bangalore");
-  const [toCity, setToCity] = useState("Chennai");
-  const [pickup, setPickup] = useState<string | null>(null);
+  const [fromCity, setFromCity] = useState("");
+  const [toCity, setToCity] = useState("");
+  const [pickup, setPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [date, setDate] = useState(() => new Date(2026, 9, 9));
   const [query, setQuery] = useState("");
-  const [draftFrom, setDraftFrom] = useState("Bangalore");
-  const [draftTo, setDraftTo] = useState("Chennai");
-  const [draftPickup, setDraftPickup] = useState<string | null>(null);
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+  const [draftPickup, setDraftPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [draftDate, setDraftDate] = useState(() => new Date(2026, 9, 9));
   const [viewMonth, setViewMonth] = useState(() => new Date(2026, 9, 1));
 
@@ -158,8 +161,11 @@ function useJourneySearch() {
     open,
     close,
     fromCity,
+    setFromCity,
     toCity,
+    setToCity,
     pickup,
+    setPickup,
     date,
     query,
     setQuery,
@@ -373,6 +379,24 @@ function DesktopLanding({
   const laceRef = useRef<HTMLDivElement>(null);
   const pairRef = useRef<HTMLDivElement>(null);
   const travellerRef = useRef<HTMLElement>(null);
+  const [suggest, setSuggest] = useState<"from" | "to" | "pickup" | null>(null);
+  const [typed, setTyped] = useState(false);
+  const fromRecentsState = useLocationRecents("from");
+  const toRecentsState = useLocationRecents("to");
+  const fromSuggest = useLocationSuggest(
+    "from_locality",
+    journey.fromCity,
+    typed && suggest === "from" && Boolean(journey.fromCity.trim()),
+  );
+  const toSuggest = useLocationSuggest(
+    "to_destination",
+    journey.toCity,
+    typed && suggest === "to" && Boolean(journey.toCity.trim()),
+  );
+  const showFromSuggest =
+    suggest === "from" && (typed ? Boolean(journey.fromCity.trim()) : fromRecentsState.recents.length > 0);
+  const showToSuggest =
+    suggest === "to" && (typed ? Boolean(journey.toCity.trim()) : toRecentsState.recents.length > 0);
 
   useEffect(() => {
     const lace = laceRef.current;
@@ -498,35 +522,72 @@ function DesktopLanding({
 
       <div className="lp-abs" style={{ left: 60, top: 378 }}>
         <div className="lp-journey">
-          <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "from"} onClick={() => journey.open("from")}>
+          <label className="lp-field">
             <img className="icon" src={a.imgBoardingTheCityBus11} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>From</small>
-              <span>{journey.fromCity}</span>
+              <input
+                value={journey.fromCity}
+                aria-label="From"
+                onFocus={() => {
+                  setSuggest("from");
+                  setTyped(false);
+                }}
+                onChange={(event) => {
+                  journey.setFromCity(event.target.value);
+                  setSuggest("from");
+                  setTyped(true);
+                }}
+              />
             </span>
-          </button>
+          </label>
           <div style={{ position: "relative", width: 36, height: 76, display: "grid", placeItems: "center" }}>
             <div className="lp-vline" style={{ position: "absolute" }} />
             <div className="lp-swap">
               <img src={a.imgSortHorizontalStreamlineSolarAr} alt="" />
             </div>
           </div>
-          <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "to"} onClick={() => journey.open("to")}>
+          <label className="lp-field">
             <img className="icon" src={a.imgBusExitAdventure1} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>To</small>
-              <span>{journey.toCity}</span>
+              <input
+                value={journey.toCity}
+                aria-label="To"
+                onFocus={() => {
+                  setSuggest("to");
+                  setTyped(false);
+                }}
+                onChange={(event) => {
+                  journey.setToCity(event.target.value);
+                  setSuggest("to");
+                  setTyped(true);
+                }}
+              />
             </span>
-          </button>
+          </label>
           <div className="lp-vline" />
-          <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "pickup"} onClick={() => journey.open("pickup")}>
+          <label className="lp-field">
             <img className="icon" src={a.imgRedHattedDeliveryRiderWithParcel1} alt="" decoding="async" fetchPriority="low" />
             <span className="lp-field-copy">
               <small>Pickup point</small>
-              <span>{journey.pickup ?? "Choose your stop"}</span>
+              <input
+                value={FIXED_PICKUP_POINT}
+                aria-label="Pickup point"
+                onFocus={() => {
+                  setSuggest(null);
+                  setTyped(false);
+                  journey.setPickup(FIXED_PICKUP_POINT);
+                }}
+                onChange={() => {
+                  journey.setPickup(FIXED_PICKUP_POINT);
+                  setSuggest(null);
+                  setTyped(false);
+                }}
+              />
             </span>
             <img src={a.imgAltArrowDownStreamlineSolarAr} width={24} height={24} alt="" />
-          </button>
+          </label>
           <div className="lp-vline" />
           <button className="lp-field" type="button" aria-haspopup="dialog" aria-expanded={journey.panel === "date"} onClick={() => journey.open("date")}>
             <img className="icon" src={a.imgColorfulCalendarIconWithCheckmark1} alt="" decoding="async" fetchPriority="low" />
@@ -543,6 +604,47 @@ function DesktopLanding({
             </span>
           </button>
         </div>
+        {showFromSuggest ? (
+          <SuggestMenu
+            className="lp-desk-suggest"
+            top={109}
+            left={43}
+            query={typed ? journey.fromCity : ""}
+            recents={fromRecentsState.recents}
+            popularTitle="Popular Boarding Points near you"
+            popular={typed ? fromSuggest.items : []}
+            popularMeta="Board at"
+            remoteStatus={typed && journey.fromCity.trim() ? fromSuggest.status : undefined}
+            onClearRecents={fromRecentsState.clear}
+            onPick={(name) => {
+              fromRecentsState.remember(name);
+              journey.setFromCity(name);
+              setSuggest(null);
+              setTyped(false);
+            }}
+          />
+        ) : null}
+        {showToSuggest ? (
+          <SuggestMenu
+            className="lp-desk-suggest"
+            top={109}
+            left={280}
+            query={typed ? journey.toCity : ""}
+            recents={toRecentsState.recents}
+            popularTitle="Popular Dropping Points near you"
+            popular={typed ? toSuggest.items : []}
+            popularMeta="Drop at"
+            remoteStatus={typed && journey.toCity.trim() ? toSuggest.status : undefined}
+            excludeBengaluru
+            onClearRecents={toRecentsState.clear}
+            onPick={(name) => {
+              toRecentsState.remember(name);
+              journey.setToCity(name);
+              setSuggest(null);
+              setTyped(false);
+            }}
+          />
+        ) : null}
       </div>
 
       <div className="lp-hero-chakra lp-abs" style={{ left: "50%", top: 547, transform: "translateX(-50%)", width: 591, height: 272, overflow: "hidden" }}>
@@ -758,7 +860,14 @@ function DesktopLanding({
           </p>
         </div>
         <img src={a.imgLine13} alt="" style={{ width: 1, height: 179 }} />
-        <FooterCol title="Work with us" items={["Become a cook", "Become a delivery partner"]} width={248} />
+        <FooterCol
+          title="Work with us"
+          items={[
+            { label: "Become a cook", path: PATHS.becomeCook },
+            { label: "Become a delivery partner", path: PATHS.becomeDeliveryPartner },
+          ]}
+          width={248}
+        />
       </div>
       <p className="lp-abs" style={{ left: 60, top: 5268, zIndex: 2, display: "flex", gap: 12, alignItems: "center", margin: 0, color: "#a68882", fontSize: 17, lineHeight: 1.09 }}>
         <img src={a.imgCopyrightStreamlineSolarAr} width={24} height={24} alt="" />
@@ -818,15 +927,47 @@ function Traveller({
   );
 }
 
-function FooterCol({ title, items, width }: { title: string; items: string[]; width?: number }) {
+type FooterItem = string | { label: string; path: string };
+
+function FooterCol({ title, items, width }: { title: string; items: FooterItem[]; width?: number }) {
   return (
     <div style={{ minWidth: 135, width }}>
       <h3 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 24px", lineHeight: 1.09 }}>{title}</h3>
-      {items.map((item) => (
-        <p key={item} style={{ color: "#a68882", fontSize: 18, margin: "0 0 20px", lineHeight: 1.09, whiteSpace: "nowrap" }}>
-          {item}
-        </p>
-      ))}
+      {items.map((item) => {
+        const label = typeof item === "string" ? item : item.label;
+        const path = typeof item === "string" ? null : item.path;
+        if (path) {
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => navigate(path)}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                border: 0,
+                background: "transparent",
+                color: "#a68882",
+                fontSize: 18,
+                margin: "0 0 20px",
+                padding: 0,
+                lineHeight: 1.09,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {label}
+            </button>
+          );
+        }
+        return (
+          <p key={label} style={{ color: "#a68882", fontSize: 18, margin: "0 0 20px", lineHeight: 1.09, whiteSpace: "nowrap" }}>
+            {label}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -1030,7 +1171,13 @@ export function MobileLanding({
           <p style={{ color: "#a68882" }}>7382987332</p>
           <p style={{ color: "#a68882" }}>RR Complex, No. 32, K No. 1146/50/32,1st Floor, Chikkabegur Gate,Hosur Main Road,Bengaluru, Karnataka, India</p>
         </div>
-        <FooterCol title="Work with us" items={["Become a cook", "Become a delivery partner"]} />
+        <FooterCol
+          title="Work with us"
+          items={[
+            { label: "Become a cook", path: PATHS.becomeCook },
+            { label: "Become a delivery partner", path: PATHS.becomeDeliveryPartner },
+          ]}
+        />
         <p style={{ color: "#a68882" }}>2026 Aahaa Pvt Ltd . All rights reserved.</p>
         <p style={{ color: "#a68882" }}>Privacy Policy · Terma & Conditions</p>
       </section>
@@ -1263,73 +1410,43 @@ function JourneyOverlay({ journey }: { journey: JourneySearch }) {
 
 const Y = (figmaTop: number) => figmaTop - 48;
 
-const FROM_RECENTS = [
-  { title: "Anand Rao Circle - Hyderabad", action: "Route" },
-  { title: "Anand Rao Circle - Chennai", action: "Route" },
-  { title: "Hyderabad", action: "" },
-  { title: "Anand Rao Circle", action: "Route" },
-] as const;
-
-const FROM_BOARDING = [
-  { title: "Anand Rao Circle", city: "Bengaluru" },
-  { title: "Madiwala", city: "Bengaluru" },
-  { title: "K R Puram", city: "Bengaluru" },
-  { title: "Majestic (Kempegowda)", city: "Bengaluru" },
-] as const;
-
-const TO_RECENTS = [
-  { title: "Chennai", action: "Route" },
-  { title: "Bangalore", action: "Route" },
-  { title: "Anand Rao Circle - Chennai", action: "Route" },
-  { title: "Madiwala - Chennai", action: "Route" },
-] as const;
-
-const TO_DROPPING = [
-  { title: "Chennai Central", city: "Chennai" },
-  { title: "Koyambedu", city: "Chennai" },
-  { title: "Tambaram", city: "Chennai" },
-  { title: "Guindy", city: "Chennai" },
-] as const;
-
-const PICKUP_RECENTS = [
-  { title: "Koyambedu", action: "Pick up" },
-  { title: "Chennai Central", action: "Pick up" },
-  { title: "Tambaram", action: "Pick up" },
-  { title: "T. Nagar", action: "Pick up" },
-] as const;
-
-const PICKUP_POPULAR = [
-  { title: "Koyambedu", city: "Chennai" },
-  { title: "Chennai Central", city: "Chennai" },
-  { title: "Tambaram", city: "Chennai" },
-  { title: "Guindy", city: "Chennai" },
-  { title: "T. Nagar", city: "Chennai" },
-] as const;
-
-
 function FigmaMobileLanding() {
   const [openFaq, setOpenFaq] = useState(0);
   const [panel, setPanel] = useState<JourneyPanel>(null);
   const [fromCity, setFromCity] = useState("");
   const [toCity, setToCity] = useState("");
-  const [pickup, setPickup] = useState<string | null>(null);
+  const [pickup, setPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [date, setDate] = useState<Date | null>(null);
   const [query, setQuery] = useState("");
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
-  const [draftPickup, setDraftPickup] = useState<string | null>(null);
+  const [draftPickup, setDraftPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [draftDate, setDraftDate] = useState(() => new Date(2026, 9, 12));
   const [viewMonth, setViewMonth] = useState(() => new Date(2026, 9, 1));
-  const [fromRecents, setFromRecents] = useState(() => [...FROM_RECENTS]);
-  const [toRecents, setToRecents] = useState(() => [...TO_RECENTS]);
-  const [pickupRecents, setPickupRecents] = useState(() => [...PICKUP_RECENTS]);
-  const [suggest, setSuggest] = useState<"from" | "to" | "pickup" | null>(null);
+  const [suggest, setSuggest] = useState<"from" | "to" | null>(null);
   const [typed, setTyped] = useState(false);
+  const fromRecentsState = useLocationRecents("from");
+  const toRecentsState = useLocationRecents("to");
+  const fromSuggest = useLocationSuggest(
+    "from_locality",
+    fromCity,
+    typed && suggest === "from" && Boolean(fromCity.trim()),
+  );
+  const toSuggest = useLocationSuggest(
+    "to_destination",
+    toCity,
+    typed && suggest === "to" && Boolean(toCity.trim()),
+  );
+  const showFromSuggest =
+    suggest === "from" && (typed ? Boolean(fromCity.trim()) : fromRecentsState.recents.length > 0);
+  const showToSuggest =
+    suggest === "to" && (typed ? Boolean(toCity.trim()) : toRecentsState.recents.length > 0);
 
   function openPanel(next: Exclude<JourneyPanel, null>) {
     setDraftFrom(fromCity);
     setDraftTo(toCity);
-    setDraftPickup(pickup);
+    setDraftPickup(FIXED_PICKUP_POINT);
+    setPickup(FIXED_PICKUP_POINT);
     const nextDate = date ?? new Date(2026, 9, 12);
     setDraftDate(nextDate);
     setViewMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
@@ -1476,7 +1593,7 @@ function FigmaMobileLanding() {
         top={Y(357)}
         width={322}
         label="Pickup point"
-        value={pickup ?? ""}
+        value={pickup ?? FIXED_PICKUP_POINT}
         icon={a.imgRedHattedDeliveryRiderWithParcel1}
         iconW={24}
         iconH={21}
@@ -1486,13 +1603,14 @@ function FigmaMobileLanding() {
         boxed
         editable
         onFocus={() => {
-          setSuggest("pickup");
+          setSuggest(null);
           setTyped(false);
+          setPickup(FIXED_PICKUP_POINT);
         }}
-        onChange={(next) => {
-          setPickup(next);
-          setSuggest("pickup");
-          setTyped(true);
+        onChange={() => {
+          setPickup(FIXED_PICKUP_POINT);
+          setSuggest(null);
+          setTyped(false);
         }}
       />
       <hr className="mlp-abs mlp-hairline" style={{ left: 34, top: Y(401), width: 322 }} />
@@ -1501,49 +1619,42 @@ function FigmaMobileLanding() {
         <img src={a.imgMagniferStreamlineSolarAr} width={20} height={20} alt="" />
         Search Amma food
       </button>
-      {typed && suggest === "from" && fromCity.trim() ? (
+      {showFromSuggest ? (
         <SuggestMenu
+          className="mlp-suggest--from"
           top={Y(293)}
-          query={fromCity}
-          recents={fromRecents}
+          left={16}
+          query={typed ? fromCity : ""}
+          recents={fromRecentsState.recents}
           popularTitle="Popular Boarding Points near you"
-          popular={FROM_BOARDING}
+          popular={typed ? fromSuggest.items : []}
           popularMeta="Board at"
-          onClearRecents={() => setFromRecents([])}
+          remoteStatus={typed && fromCity.trim() ? fromSuggest.status : undefined}
+          onClearRecents={fromRecentsState.clear}
           onPick={(name) => {
+            fromRecentsState.remember(name);
             setFromCity(name);
             setSuggest(null);
             setTyped(false);
           }}
         />
       ) : null}
-      {typed && suggest === "to" && toCity.trim() ? (
+      {showToSuggest ? (
         <SuggestMenu
+          className="mlp-suggest--to"
           top={Y(347)}
-          query={toCity}
-          recents={toRecents}
+          left={16}
+          query={typed ? toCity : ""}
+          recents={toRecentsState.recents}
           popularTitle="Popular Dropping Points near you"
-          popular={TO_DROPPING}
+          popular={typed ? toSuggest.items : []}
           popularMeta="Drop at"
-          onClearRecents={() => setToRecents([])}
+          remoteStatus={typed && toCity.trim() ? toSuggest.status : undefined}
+          excludeBengaluru
+          onClearRecents={toRecentsState.clear}
           onPick={(name) => {
+            toRecentsState.remember(name);
             setToCity(name);
-            setSuggest(null);
-            setTyped(false);
-          }}
-        />
-      ) : null}
-      {typed && suggest === "pickup" && (pickup ?? "").trim() ? (
-        <SuggestMenu
-          top={Y(401)}
-          query={pickup ?? ""}
-          recents={pickupRecents}
-          popularTitle="Popular Pickup Points near you"
-          popular={PICKUP_POPULAR}
-          popularMeta="Pick up"
-          onClearRecents={() => setPickupRecents([])}
-          onPick={(name) => {
-            setPickup(name);
             setSuggest(null);
             setTyped(false);
           }}
@@ -1699,8 +1810,12 @@ function FigmaMobileLanding() {
       <div className="mlp-abs" style={{ left: 186, top: Y(3446), width: 175, display: "flex", flexDirection: "column", gap: 12 }}>
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.09 }}>Work with us</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, color: "#a68882", fontSize: 14, lineHeight: 1.09 }}>
-          <span>Become a cook</span>
-          <span>Become a delivery partner</span>
+          <button type="button" onClick={() => navigate(PATHS.becomeCook)} style={{ border: 0, background: "transparent", color: "inherit", font: "inherit", textAlign: "left", padding: 0, cursor: "pointer" }}>
+            Become a cook
+          </button>
+          <button type="button" onClick={() => navigate(PATHS.becomeDeliveryPartner)} style={{ border: 0, background: "transparent", color: "inherit", font: "inherit", textAlign: "left", padding: 0, cursor: "pointer" }}>
+            Become a delivery partner
+          </button>
         </div>
       </div>
       <hr className="mlp-abs mlp-hairline" style={{ left: 16, top: Y(3531), width: 358 }} />
@@ -1750,7 +1865,7 @@ function FigmaMobileLanding() {
         setViewMonth={setViewMonth}
         onClose={closePanel}
         onSaveFrom={() => {
-          setFromCity(draftFrom === "Bengalure" ? "Bangalore" : draftFrom);
+          setFromCity(draftFrom);
           closePanel();
         }}
         onSaveTo={() => {
@@ -1758,7 +1873,8 @@ function FigmaMobileLanding() {
           closePanel();
         }}
         onSavePickup={() => {
-          setPickup(draftPickup);
+          setPickup(FIXED_PICKUP_POINT);
+          setDraftPickup(FIXED_PICKUP_POINT);
           closePanel();
         }}
         onSaveDate={() => {
@@ -1768,10 +1884,6 @@ function FigmaMobileLanding() {
       />
     </>
   );
-}
-
-function fromPickName(title: string) {
-  return title.includes(" - ") ? title.split(" - ")[0] : title;
 }
 
 function ClockIcon() {
@@ -1785,30 +1897,56 @@ function ClockIcon() {
 
 function SuggestMenu({
   top,
+  left = 16,
+  className,
   query,
   recents,
   popularTitle,
   popular,
   popularMeta,
+  remoteStatus,
+  excludeBengaluru = false,
   onClearRecents,
   onPick,
 }: {
   top: number;
+  left?: number;
+  className?: string;
   query: string;
   recents: { title: string; action: string }[];
   popularTitle: string;
   popular: readonly { title: string; city: string }[];
   popularMeta: string;
+  remoteStatus?: LocationSuggestStatus;
+  excludeBengaluru?: boolean;
   onClearRecents: () => void;
   onPick: (name: string) => void;
 }) {
-  const needle = query.trim().toLowerCase();
-  const recentHits = recents.filter((item) => item.title.toLowerCase().includes(needle));
-  const popularHits = popular.filter((item) => `${item.title} ${item.city}`.toLowerCase().includes(needle));
-  if (!recentHits.length && !popularHits.length) return null;
+  const needle = normalizeJourneySearch(query.trim());
+  const useRemote = remoteStatus !== undefined && remoteStatus !== "idle";
+  const recentHits = recents.filter((item) => {
+    if (!normalizeJourneySearch(item.title).includes(needle)) return false;
+    if (excludeBengaluru && isBengaluruPlace(journeyPickName(item.title))) return false;
+    return true;
+  });
+  const popularHits = useRemote
+    ? popular.filter((item) => !(excludeBengaluru && isBengaluruPlace(item.title)))
+    : popular.filter((item) => {
+        if (!normalizeJourneySearch(`${item.title} ${item.city}`).includes(needle)) return false;
+        if (excludeBengaluru && isBengaluruPlace(item.title)) return false;
+        return true;
+      });
+  const showLoading = remoteStatus === "loading";
+  const showError = remoteStatus === "error";
+  const showEmpty = remoteStatus === "empty" && popularHits.length === 0;
+  if (!recentHits.length && !popularHits.length && !showLoading && !showError && !showEmpty) return null;
 
   return (
-    <div className="mlp-abs mlp-suggest" style={{ left: 16, top }} onMouseDown={(event) => event.preventDefault()}>
+    <div
+      className={["mlp-abs", "mlp-suggest", className].filter(Boolean).join(" ")}
+      style={{ left, top }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
       {recentHits.length > 0 ? (
         <div className="mlp-from-section">
           <div className="mlp-from-section-head">
@@ -1818,7 +1956,7 @@ function SuggestMenu({
             </button>
           </div>
           {recentHits.map((item) => (
-            <button key={item.title} type="button" className="mlp-from-row" onClick={() => onPick(fromPickName(item.title))}>
+            <button key={item.title} type="button" className="mlp-from-row" onClick={() => onPick(journeyPickName(item.title))}>
               <span className="mlp-from-row-icon">
                 <ClockIcon />
               </span>
@@ -1827,6 +1965,27 @@ function SuggestMenu({
               <img className="mlp-from-row-chevron" src={a.imgAltArrowDownStreamlineSolarAr} alt="" />
             </button>
           ))}
+        </div>
+      ) : null}
+      {showLoading ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>Searching…</p>
+          </div>
+        </div>
+      ) : null}
+      {showError ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>Unable to load places</p>
+          </div>
+        </div>
+      ) : null}
+      {showEmpty ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>No matching places</p>
+          </div>
         </div>
       ) : null}
       {popularHits.length > 0 ? (

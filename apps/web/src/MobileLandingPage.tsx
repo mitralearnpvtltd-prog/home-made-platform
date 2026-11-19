@@ -1,6 +1,10 @@
 // @ts-nocheck — kept as a visual/behavior reference after consolidation into LandingPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import * as existing from "./assets/landing";
+import { FIXED_PICKUP_POINT, isBengaluruPlace, journeyPickName, normalizeJourneySearch } from "./cookData";
+import { useLocationRecents } from "./lib/useLocationRecents";
+import { useLocationSuggest, type LocationSuggestStatus } from "./lib/useLocationSuggest";
+import { navigate, PATHS } from "./navigation";
 import imgAahaaBannerSoftTheme from "./assets/mobile-landing/imgAahaaBannerSoftTheme.png";
 import imgImage111 from "./assets/mobile-landing/imgImage111.png";
 import imgImage130 from "./assets/mobile-landing/imgImage130.png";
@@ -12,71 +16,6 @@ import imgRetroOrangeCreamBusSticker3 from "./assets/mobile-landing/imgRetroOran
 import "./styles/mobile-landing.css";
 
 const Y = (figmaTop: number) => figmaTop - 48;
-
-const FROM_CITIES = [
-  { name: "Bengalure", region: "Karnataka" },
-  { name: "Hyderabad", region: "Telangana" },
-  { name: "Chennai", region: "Tamil Nadu" },
-  { name: "Kochi", region: "Kerala" },
-  { name: "Coimbatore", region: "Tamil Nadu" },
-] as const;
-
-const TO_CITIES = [
-  { name: "Salem", region: "Tamil Nadu" },
-  { name: "Hyderabad", region: "Telangana" },
-  { name: "Chennai", region: "Tamil Nadu" },
-  { name: "Kochi", region: "Kerala" },
-  { name: "Coimbatore", region: "Tamil Nadu" },
-] as const;
-
-const PICKUP_STOPS = [
-  { name: "Housr", time: "( 1 : 30 )", kind: "Bus stand" },
-  { name: "Krishnagiri", time: "( 2 : 30 )", kind: "Bus stand" },
-  { name: "Vellore", time: "( 4 : 30 )", kind: "Bus stand" },
-] as const;
-
-const FROM_RECENTS = [
-  { title: "Anand Rao Circle - Hyderabad", action: "Route" },
-  { title: "Anand Rao Circle - Chennai", action: "Route" },
-  { title: "Hyderabad", action: "" },
-  { title: "Anand Rao Circle", action: "Route" },
-] as const;
-
-const FROM_BOARDING = [
-  { title: "Anand Rao Circle", city: "Bengaluru" },
-  { title: "Madiwala", city: "Bengaluru" },
-  { title: "K R Puram", city: "Bengaluru" },
-  { title: "Majestic (Kempegowda)", city: "Bengaluru" },
-] as const;
-
-const TO_RECENTS = [
-  { title: "Chennai", action: "Route" },
-  { title: "Bangalore", action: "Route" },
-  { title: "Anand Rao Circle - Chennai", action: "Route" },
-  { title: "Madiwala - Chennai", action: "Route" },
-] as const;
-
-const TO_DROPPING = [
-  { title: "Chennai Central", city: "Chennai" },
-  { title: "Koyambedu", city: "Chennai" },
-  { title: "Tambaram", city: "Chennai" },
-  { title: "Guindy", city: "Chennai" },
-] as const;
-
-const PICKUP_RECENTS = [
-  { title: "Koyambedu", action: "Pick up" },
-  { title: "Chennai Central", action: "Pick up" },
-  { title: "Tambaram", action: "Pick up" },
-  { title: "T. Nagar", action: "Pick up" },
-] as const;
-
-const PICKUP_POPULAR = [
-  { title: "Koyambedu", city: "Chennai" },
-  { title: "Chennai Central", city: "Chennai" },
-  { title: "Tambaram", city: "Chennai" },
-  { title: "Guindy", city: "Chennai" },
-  { title: "T. Nagar", city: "Chennai" },
-] as const;
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -106,10 +45,6 @@ function monthCells(year: number, month: number) {
   return [...Array<number | null>(weekday).fill(null), ...Array.from({ length: days }, (_, index) => index + 1)];
 }
 
-function isFromSelected(fromCity: string, name: string) {
-  return fromCity === name || (fromCity === "Bangalore" && name === "Bengalure");
-}
-
 const faqs = [
   {
     q: "Does Aahaa arrange a stop for my bus?",
@@ -127,24 +62,38 @@ export function MobileLandingPage() {
   const [panel, setPanel] = useState<JourneyPanel>(null);
   const [fromCity, setFromCity] = useState("");
   const [toCity, setToCity] = useState("");
-  const [pickup, setPickup] = useState<string | null>(null);
+  const [pickup, setPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [date, setDate] = useState<Date | null>(null);
   const [query, setQuery] = useState("");
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
-  const [draftPickup, setDraftPickup] = useState<string | null>(null);
+  const [draftPickup, setDraftPickup] = useState<string | null>(FIXED_PICKUP_POINT);
   const [draftDate, setDraftDate] = useState(() => new Date(2026, 9, 12));
   const [viewMonth, setViewMonth] = useState(() => new Date(2026, 9, 1));
-  const [fromRecents, setFromRecents] = useState(() => [...FROM_RECENTS]);
-  const [toRecents, setToRecents] = useState(() => [...TO_RECENTS]);
-  const [pickupRecents, setPickupRecents] = useState(() => [...PICKUP_RECENTS]);
-  const [suggest, setSuggest] = useState<"from" | "to" | "pickup" | null>(null);
+  const [suggest, setSuggest] = useState<"from" | "to" | null>(null);
   const [typed, setTyped] = useState(false);
+  const fromRecentsState = useLocationRecents("from");
+  const toRecentsState = useLocationRecents("to");
+  const fromSuggest = useLocationSuggest(
+    "from_locality",
+    fromCity,
+    typed && suggest === "from" && Boolean(fromCity.trim()),
+  );
+  const toSuggest = useLocationSuggest(
+    "to_destination",
+    toCity,
+    typed && suggest === "to" && Boolean(toCity.trim()),
+  );
+  const showFromSuggest =
+    suggest === "from" && (typed ? Boolean(fromCity.trim()) : fromRecentsState.recents.length > 0);
+  const showToSuggest =
+    suggest === "to" && (typed ? Boolean(toCity.trim()) : toRecentsState.recents.length > 0);
 
   function openPanel(next: Exclude<JourneyPanel, null>) {
     setDraftFrom(fromCity);
     setDraftTo(toCity);
-    setDraftPickup(pickup);
+    setDraftPickup(FIXED_PICKUP_POINT);
+    setPickup(FIXED_PICKUP_POINT);
     const nextDate = date ?? new Date(2026, 9, 12);
     setDraftDate(nextDate);
     setViewMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
@@ -289,7 +238,7 @@ export function MobileLandingPage() {
         top={Y(357)}
         width={322}
         label="Pickup point"
-        value={pickup ?? ""}
+        value={FIXED_PICKUP_POINT}
         icon={existing.imgRedHattedDeliveryRiderWithParcel1}
         iconW={24}
         iconH={21}
@@ -298,13 +247,14 @@ export function MobileLandingPage() {
         boxed
         editable
         onFocus={() => {
-          setSuggest("pickup");
+          setSuggest(null);
           setTyped(false);
+          setPickup(FIXED_PICKUP_POINT);
         }}
-        onChange={(next) => {
-          setPickup(next);
-          setSuggest("pickup");
-          setTyped(true);
+        onChange={() => {
+          setPickup(FIXED_PICKUP_POINT);
+          setSuggest(null);
+          setTyped(false);
         }}
       />
       <hr className="mlp-abs mlp-hairline" style={{ left: 34, top: Y(401), width: 322 }} />
@@ -313,49 +263,42 @@ export function MobileLandingPage() {
         <img src={existing.imgMagniferStreamlineSolarAr} width={20} height={20} alt="" />
         Search Amma food
       </button>
-      {typed && suggest === "from" && fromCity.trim() ? (
+      {showFromSuggest ? (
         <SuggestMenu
+          className="mlp-suggest--from"
           top={Y(293)}
-          query={fromCity}
-          recents={fromRecents}
+          left={16}
+          query={typed ? fromCity : ""}
+          recents={fromRecentsState.recents}
           popularTitle="Popular Boarding Points near you"
-          popular={FROM_BOARDING}
+          popular={typed ? fromSuggest.items : []}
           popularMeta="Board at"
-          onClearRecents={() => setFromRecents([])}
+          remoteStatus={typed && fromCity.trim() ? fromSuggest.status : undefined}
+          onClearRecents={fromRecentsState.clear}
           onPick={(name) => {
+            fromRecentsState.remember(name);
             setFromCity(name);
             setSuggest(null);
             setTyped(false);
           }}
         />
       ) : null}
-      {typed && suggest === "to" && toCity.trim() ? (
+      {showToSuggest ? (
         <SuggestMenu
+          className="mlp-suggest--to"
           top={Y(347)}
-          query={toCity}
-          recents={toRecents}
+          left={16}
+          query={typed ? toCity : ""}
+          recents={toRecentsState.recents}
           popularTitle="Popular Dropping Points near you"
-          popular={TO_DROPPING}
+          popular={typed ? toSuggest.items : []}
           popularMeta="Drop at"
-          onClearRecents={() => setToRecents([])}
+          remoteStatus={typed && toCity.trim() ? toSuggest.status : undefined}
+          excludeBengaluru
+          onClearRecents={toRecentsState.clear}
           onPick={(name) => {
+            toRecentsState.remember(name);
             setToCity(name);
-            setSuggest(null);
-            setTyped(false);
-          }}
-        />
-      ) : null}
-      {typed && suggest === "pickup" && (pickup ?? "").trim() ? (
-        <SuggestMenu
-          top={Y(401)}
-          query={pickup ?? ""}
-          recents={pickupRecents}
-          popularTitle="Popular Pickup Points near you"
-          popular={PICKUP_POPULAR}
-          popularMeta="Pick up"
-          onClearRecents={() => setPickupRecents([])}
-          onPick={(name) => {
-            setPickup(name);
             setSuggest(null);
             setTyped(false);
           }}
@@ -491,8 +434,12 @@ export function MobileLandingPage() {
       <div className="mlp-abs" style={{ left: 186, top: Y(3446), width: 175, display: "flex", flexDirection: "column", gap: 12 }}>
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.09 }}>Work with us</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, color: "#a68882", fontSize: 14, lineHeight: 1.09 }}>
-          <span>Become a cook</span>
-          <span>Become a delivery partner</span>
+          <button type="button" onClick={() => navigate(PATHS.becomeCook)} style={{ border: 0, background: "transparent", color: "inherit", font: "inherit", textAlign: "left", padding: 0, cursor: "pointer" }}>
+            Become a cook
+          </button>
+          <button type="button" onClick={() => navigate(PATHS.becomeDeliveryPartner)} style={{ border: 0, background: "transparent", color: "inherit", font: "inherit", textAlign: "left", padding: 0, cursor: "pointer" }}>
+            Become a delivery partner
+          </button>
         </div>
       </div>
       <hr className="mlp-abs mlp-hairline" style={{ left: 16, top: Y(3531), width: 358 }} />
@@ -542,7 +489,7 @@ export function MobileLandingPage() {
         setViewMonth={setViewMonth}
         onClose={closePanel}
         onSaveFrom={() => {
-          setFromCity(draftFrom === "Bengalure" ? "Bangalore" : draftFrom);
+          setFromCity(draftFrom);
           closePanel();
         }}
         onSaveTo={() => {
@@ -550,7 +497,8 @@ export function MobileLandingPage() {
           closePanel();
         }}
         onSavePickup={() => {
-          setPickup(draftPickup);
+          setPickup(FIXED_PICKUP_POINT);
+          setDraftPickup(FIXED_PICKUP_POINT);
           closePanel();
         }}
         onSaveDate={() => {
@@ -560,10 +508,6 @@ export function MobileLandingPage() {
       />
     </>
   );
-}
-
-function fromPickName(title: string) {
-  return title.includes(" - ") ? title.split(" - ")[0] : title;
 }
 
 function ClockIcon() {
@@ -577,30 +521,56 @@ function ClockIcon() {
 
 function SuggestMenu({
   top,
+  left = 16,
+  className,
   query,
   recents,
   popularTitle,
   popular,
   popularMeta,
+  remoteStatus,
+  excludeBengaluru = false,
   onClearRecents,
   onPick,
 }: {
   top: number;
+  left?: number;
+  className?: string;
   query: string;
   recents: { title: string; action: string }[];
   popularTitle: string;
   popular: readonly { title: string; city: string }[];
   popularMeta: string;
+  remoteStatus?: LocationSuggestStatus;
+  excludeBengaluru?: boolean;
   onClearRecents: () => void;
   onPick: (name: string) => void;
 }) {
-  const needle = query.trim().toLowerCase();
-  const recentHits = recents.filter((item) => item.title.toLowerCase().includes(needle));
-  const popularHits = popular.filter((item) => `${item.title} ${item.city}`.toLowerCase().includes(needle));
-  if (!recentHits.length && !popularHits.length) return null;
+  const needle = normalizeJourneySearch(query.trim());
+  const useRemote = remoteStatus !== undefined && remoteStatus !== "idle";
+  const recentHits = recents.filter((item) => {
+    if (!normalizeJourneySearch(item.title).includes(needle)) return false;
+    if (excludeBengaluru && isBengaluruPlace(journeyPickName(item.title))) return false;
+    return true;
+  });
+  const popularHits = useRemote
+    ? popular.filter((item) => !(excludeBengaluru && isBengaluruPlace(item.title)))
+    : popular.filter((item) => {
+        if (!normalizeJourneySearch(`${item.title} ${item.city}`).includes(needle)) return false;
+        if (excludeBengaluru && isBengaluruPlace(item.title)) return false;
+        return true;
+      });
+  const showLoading = remoteStatus === "loading";
+  const showError = remoteStatus === "error";
+  const showEmpty = remoteStatus === "empty" && popularHits.length === 0;
+  if (!recentHits.length && !popularHits.length && !showLoading && !showError && !showEmpty) return null;
 
   return (
-    <div className="mlp-abs mlp-suggest" style={{ left: 16, top }} onMouseDown={(event) => event.preventDefault()}>
+    <div
+      className={["mlp-abs", "mlp-suggest", className].filter(Boolean).join(" ")}
+      style={{ left, top }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
       {recentHits.length > 0 ? (
         <div className="mlp-from-section">
           <div className="mlp-from-section-head">
@@ -610,7 +580,7 @@ function SuggestMenu({
             </button>
           </div>
           {recentHits.map((item) => (
-            <button key={item.title} type="button" className="mlp-from-row" onClick={() => onPick(fromPickName(item.title))}>
+            <button key={item.title} type="button" className="mlp-from-row" onClick={() => onPick(journeyPickName(item.title))}>
               <span className="mlp-from-row-icon">
                 <ClockIcon />
               </span>
@@ -619,6 +589,27 @@ function SuggestMenu({
               <img className="mlp-from-row-chevron" src={existing.imgAltArrowDownStreamlineSolarAr} alt="" />
             </button>
           ))}
+        </div>
+      ) : null}
+      {showLoading ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>Searching…</p>
+          </div>
+        </div>
+      ) : null}
+      {showError ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>Unable to load places</p>
+          </div>
+        </div>
+      ) : null}
+      {showEmpty ? (
+        <div className="mlp-from-section">
+          <div className="mlp-from-section-head">
+            <p>No matching places</p>
+          </div>
         </div>
       ) : null}
       {popularHits.length > 0 ? (
@@ -705,47 +696,13 @@ function JourneyField({
   );
 }
 
-function PlaceRow({
-  selected,
-  title,
-  subtitle,
-  onSelect,
-}: {
-  selected: boolean;
-  title: string;
-  subtitle: string;
-  onSelect: () => void;
-}) {
-  return (
-    <button type="button" className={selected ? "mlp-place is-selected" : "mlp-place"} onClick={onSelect}>
-      <img src={selected ? existing.imgMapPointStreamlineSolar : existing.imgMapPointStreamlineSolarMuted} alt="" />
-      <span className="mlp-place-copy">
-        <strong>{title}</strong>
-        <small>{subtitle}</small>
-      </span>
-      {selected ? <img className="mlp-place-check" src={existing.imgCheckCircleStreamlineSolar} alt="" /> : null}
-    </button>
-  );
-}
-
 function JourneyOverlay({
   panel,
-  query,
-  setQuery,
-  draftFrom,
-  setDraftFrom,
-  draftTo,
-  setDraftTo,
-  draftPickup,
-  setDraftPickup,
   draftDate,
   setDraftDate,
   viewMonth,
   setViewMonth,
   onClose,
-  onSaveFrom,
-  onSaveTo,
-  onSavePickup,
   onSaveDate,
 }: {
   panel: JourneyPanel;
@@ -767,20 +724,7 @@ function JourneyOverlay({
   onSavePickup: () => void;
   onSaveDate: () => void;
 }) {
-  const filteredFrom = useMemo(
-    () => FROM_CITIES.filter((city) => `${city.name} ${city.region}`.toLowerCase().includes(query.trim().toLowerCase())),
-    [query],
-  );
-  const filteredTo = useMemo(
-    () => TO_CITIES.filter((city) => `${city.name} ${city.region}`.toLowerCase().includes(query.trim().toLowerCase())),
-    [query],
-  );
-  const filteredStops = useMemo(
-    () => PICKUP_STOPS.filter((stop) => `${stop.name} ${stop.time} ${stop.kind}`.toLowerCase().includes(query.trim().toLowerCase())),
-    [query],
-  );
-
-  if (!panel || panel === "from" || panel === "to" || panel === "pickup") return null;
+  if (panel !== "date") return null;
 
   const today = startOfDay(new Date());
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -789,147 +733,82 @@ function JourneyOverlay({
   return (
     <div className="mlp-overlay" onClick={onClose} role="presentation">
       <div
-        className={`mlp-sheet ${panel === "date" ? "mlp-sheet--date" : panel === "pickup" ? "mlp-sheet--pickup" : "mlp-sheet--city"}`}
+        className="mlp-sheet mlp-sheet--date"
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
-        {panel === "from" ? (
-          <>
-            <h2>Where are you travelling from ?</h2>
-            <label className="mlp-sheet-search">
-              <img src={existing.imgMagniferStreamlineSolarAr} alt="" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pickup points" autoFocus />
-            </label>
-            <p className="mlp-sheet-label">Suggested cities</p>
-            <div className="mlp-place-list">
-              {filteredFrom.map((city) => (
-                <PlaceRow key={city.name} selected={isFromSelected(draftFrom, city.name)} title={city.name} subtitle={city.region} onSelect={() => setDraftFrom(city.name)} />
-              ))}
-            </div>
-            <button className="mlp-sheet-save" type="button" onClick={onSaveFrom}>
-              Save
-            </button>
-          </>
-        ) : null}
-
-        {panel === "to" ? (
-          <>
-            <h2>Where are you travelling to ?</h2>
-            <label className="mlp-sheet-search">
-              <img src={existing.imgMagniferStreamlineSolarAr} alt="" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search destination points" autoFocus />
-            </label>
-            <p className="mlp-sheet-label">Suggested cities</p>
-            <div className="mlp-place-list">
-              {filteredTo.map((city) => (
-                <PlaceRow key={city.name} selected={draftTo === city.name} title={city.name} subtitle={city.region} onSelect={() => setDraftTo(city.name)} />
-              ))}
-            </div>
-            <button className="mlp-sheet-save" type="button" onClick={onSaveTo}>
-              Save
-            </button>
-          </>
-        ) : null}
-
-        {panel === "pickup" ? (
-          <>
-            <h2>Choose your pickup stop</h2>
-            <p className="mlp-sheet-lead">Select a stop where your bus aldreay stops.</p>
-            <label className="mlp-sheet-search">
-              <img src={existing.imgMagniferStreamlineSolarAr} alt="" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pickup points" autoFocus />
-            </label>
-            <div className="mlp-place-list mlp-place-list--stops">
-              {filteredStops.map((stop) => {
-                const label = `${stop.name} ${stop.time}`;
-                return (
-                  <PlaceRow key={stop.name} selected={draftPickup === label} title={label} subtitle={stop.kind} onSelect={() => setDraftPickup(label)} />
-                );
-              })}
-            </div>
-            <p className="mlp-sheet-note">Example stops for this preview</p>
-            <button className="mlp-sheet-save" type="button" onClick={onSavePickup}>
-              Save
-            </button>
-          </>
-        ) : null}
-
-        {panel === "date" ? (
-          <>
-            <h2>Choose your journey date</h2>
-            <div className="mlp-date-chips">
+        <h2>Choose your journey date</h2>
+        <div className="mlp-date-chips">
+          <button
+            className="mlp-date-chip"
+            type="button"
+            onClick={() => {
+              setDraftDate(today);
+              setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+            }}
+          >
+            Today
+          </button>
+          <button
+            className="mlp-date-chip"
+            type="button"
+            onClick={() => {
+              setDraftDate(tomorrow);
+              setViewMonth(new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1));
+            }}
+          >
+            Tomorrow
+          </button>
+        </div>
+        <div className="mlp-date-nav">
+          <button
+            className="mlp-date-dir mlp-date-dir--prev"
+            type="button"
+            aria-label="Previous month"
+            onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
+          >
+            <img src={existing.imgAltArrowDownStreamlineSolarAr} alt="" />
+          </button>
+          <strong>
+            {MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+          </strong>
+          <button
+            className="mlp-date-dir mlp-date-dir--next"
+            type="button"
+            aria-label="Next month"
+            onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
+          >
+            <img src={existing.imgAltArrowDownStreamlineSolarAr} alt="" />
+          </button>
+        </div>
+        <div className="mlp-cal">
+          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
+            <span key={label} className="mlp-cal-wd">
+              {label}
+            </span>
+          ))}
+          {cells.map((day, index) => {
+            if (!day) return <span key={`empty-${index}`} className="mlp-cal-empty" />;
+            const cellDate = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day);
+            const selected = sameDay(cellDate, draftDate);
+            const muted = cellDate < today && !selected;
+            return (
               <button
-                className="mlp-date-chip"
+                key={day}
                 type="button"
-                onClick={() => {
-                  setDraftDate(today);
-                  setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1));
-                }}
+                className={`mlp-cal-day${selected ? " is-selected" : ""}${muted ? " is-muted" : ""}`}
+                onClick={() => setDraftDate(cellDate)}
               >
-                Today
+                {day}
               </button>
-              <button
-                className="mlp-date-chip"
-                type="button"
-                onClick={() => {
-                  setDraftDate(tomorrow);
-                  setViewMonth(new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1));
-                }}
-              >
-                Tomorrow
-              </button>
-            </div>
-            <div className="mlp-date-nav">
-              <button
-                className="mlp-date-dir mlp-date-dir--prev"
-                type="button"
-                aria-label="Previous month"
-                onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
-              >
-                <img src={existing.imgAltArrowDownStreamlineSolarAr} alt="" />
-              </button>
-              <strong>
-                {MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()}
-              </strong>
-              <button
-                className="mlp-date-dir mlp-date-dir--next"
-                type="button"
-                aria-label="Next month"
-                onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
-              >
-                <img src={existing.imgAltArrowDownStreamlineSolarAr} alt="" />
-              </button>
-            </div>
-            <div className="mlp-cal">
-              {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((label) => (
-                <span key={label} className="mlp-cal-wd">
-                  {label}
-                </span>
-              ))}
-              {cells.map((day, index) => {
-                if (!day) return <span key={`empty-${index}`} className="mlp-cal-empty" />;
-                const cellDate = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day);
-                const selected = sameDay(cellDate, draftDate);
-                const muted = cellDate < today && !selected;
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    className={`mlp-cal-day${selected ? " is-selected" : ""}${muted ? " is-muted" : ""}`}
-                    onClick={() => setDraftDate(cellDate)}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mlp-date-selected">{formatSelectedDate(draftDate)}</p>
-            <button className="mlp-sheet-confirm" type="button" onClick={onSaveDate}>
-              Confirm date
-            </button>
-          </>
-        ) : null}
+            );
+          })}
+        </div>
+        <p className="mlp-date-selected">{formatSelectedDate(draftDate)}</p>
+        <button className="mlp-sheet-confirm" type="button" onClick={onSaveDate}>
+          Confirm date
+        </button>
       </div>
     </div>
   );

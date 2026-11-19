@@ -1,0 +1,91 @@
+import type { Meal } from "./cookData";
+
+/**
+ * Monica’s Kitchen catalogue.
+ * Dish photos are applied via `MONICA_FOOD_IMAGE_URLS` (`food-images` bucket).
+ * Leave `photo` empty here as the fallback when a URL is not set.
+ */
+export const MONICA_MEALS: Meal[] = [
+  {
+    id: "monica-lemon-rice",
+    name: "Lemon rice",
+    description: "Rice flavoured with seeds",
+    price: 80,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "monica-curd-rice-pickle",
+    name: "Curd rice & pickle",
+    description: "Soft rice with creamy curd",
+    price: 80,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "monica-tomato-bath",
+    name: "Tomato bath",
+    description: "Flavourful rice with fresh vegetables",
+    price: 90,
+    rating: 4.8,
+    reviews: 0,
+    category: "meals",
+    photo: "",
+  },
+  {
+    id: "monica-set-dosa",
+    name: "Set dosa",
+    description: "3 soft dosas with vegetable curry",
+    price: 90,
+    rating: 4.8,
+    reviews: 0,
+    category: "breakfast",
+    photo: "",
+  },
+  {
+    id: "monica-soft-idli",
+    name: "Soft idli",
+    description: "4 soft idlis",
+    price: 70,
+    rating: 4.8,
+    reviews: 0,
+    category: "breakfast",
+    photo: "",
+  },
+  {
+    id: "monica-akki-roti",
+    name: "Akki roti",
+    description: "Rice rotis with vegetable curry",
+    price: 100,
+    rating: 4.8,
+    reviews: 0,
+    category: "breakfast",
+    photo: "",
+  },
+  {
+    id: "monica-chakli",
+    name: "Chakli",
+    description: "100g",
+    price: 60,
+    rating: 4.8,
+    reviews: 0,
+    category: "snacks",
+    photo: "",
+    pack: "100g",
+  },
+  {
+    id: "monica-roasted-chana",
+    name: "Roasted chana",
+    description: "50g",
+    price: 40,
+    rating: 4.8,
+    reviews: 0,
+    category: "snacks",
+    photo: "",
+    pack: "50g",
+  },
+];

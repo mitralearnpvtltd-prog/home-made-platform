@@ -1,29 +1,98 @@
-import { useMemo } from "react";
-import { imgBusStop, mealLemonRice } from "./assets/cooks";
-import { imgBoardingTheCityBus11, imgColorfulCalendarIconWithCheckmark1, imgRedHattedDeliveryRiderWithParcel1 } from "./assets/landing";
+import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { imgBusStop } from "./assets/cooks";
+import {
+  imgAltArrowDownStreamlineSolarAr,
+  imgBoardingTheCityBus11,
+  imgColorfulCalendarIconWithCheckmark1,
+  imgMapPointStreamlineSolar,
+  imgRedHattedDeliveryRiderWithParcel1,
+} from "./assets/landing";
 import imgKitchenLakshmi from "./assets/mobile-landing/imgKitchenLakshmi.png";
-import { formatRupees, type JourneyChoice, type Meal } from "./cookData";
+import {
+  FIXED_PICKUP_POINT,
+  formatRupees,
+  isBengaluruPlace,
+  journeyPickName,
+  normalizeJourneySearch,
+  type JourneyChoice,
+  type Meal,
+} from "./cookData";
+import {
+  CHECKOUT_DELIVERY_FEE_LIST,
+  checkoutGstFromSubtotal,
+  checkoutTotalFromSubtotal,
+  formatCheckoutMoney,
+  formatGstAmount,
+} from "./lib/checkoutFees";
+import { useLocationRecents } from "./lib/useLocationRecents";
+import { useLocationSuggest, type LocationSuggestStatus } from "./lib/useLocationSuggest";
+import { MealBagThumb } from "./MealBagThumb";
+import { kitchenPhoto, SWATHI_MENU_KITCHEN, type MenuKitchen } from "./menuKitchen";
 import "./styles/cart.css";
+import "./styles/cook.css";
 
 type CartLine = { meal: Meal; qty: number };
 
 type CartPageProps = {
   bag: CartLine[];
+  kitchen?: MenuKitchen;
   journey: JourneyChoice;
+  setJourney: Dispatch<SetStateAction<JourneyChoice>>;
   stop: { name: string; time: string };
   setQty: (id: string, qty: number) => void;
+  bagThumbPulse?: Record<string, number>;
   onBack: () => void;
   onEditJourney: () => void;
   onProceed: () => void;
+  placingOrder?: boolean;
+  placeOrderError?: string;
 };
 
-export function CartPage({ bag, journey, stop, setQty, onBack, onEditJourney, onProceed }: CartPageProps) {
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+export function CartPage({
+  bag,
+  kitchen = SWATHI_MENU_KITCHEN,
+  journey,
+  setJourney,
+  stop,
+  setQty,
+  bagThumbPulse = {},
+  onBack,
+  onEditJourney,
+  onProceed,
+  placingOrder = false,
+  placeOrderError = "",
+}: CartPageProps) {
+  const [localThumbPulse, setLocalThumbPulse] = useState<Record<string, number>>({});
+  const [localPulseMode, setLocalPulseMode] = useState<Record<string, "serve" | "wobble">>({});
+  const [leavingIds, setLeavingIds] = useState<Record<string, true>>({});
   const itemCount = bag.reduce((total, line) => total + line.qty, 0);
   const subtotal = useMemo(() => bag.reduce((total, line) => total + line.meal.price * line.qty, 0), [bag]);
-  const deliveryFee = 30;
-  const taxes = 25.3;
-  const total = subtotal + deliveryFee + taxes;
+  const gst = checkoutGstFromSubtotal(subtotal);
+  const total = checkoutTotalFromSubtotal(subtotal);
   const journeyDate = `${String(journey.date.getDate()).padStart(2, "0")} ${journey.date.toLocaleString("en", { month: "short" })} ${journey.date.getFullYear()}`;
+  const suggestRef = useRef<HTMLElement>(null);
+  const [suggest, setSuggest] = useState<"from" | "to" | "pickup" | null>(null);
+  const [typed, setTyped] = useState(false);
+  const fromRecentsState = useLocationRecents("from");
+  const toRecentsState = useLocationRecents("to");
+  const fromSuggest = useLocationSuggest(
+    "from_locality",
+    journey.from,
+    typed && suggest === "from" && Boolean(journey.from.trim()),
+  );
+  const toSuggest = useLocationSuggest(
+    "to_destination",
+    journey.to,
+    typed && suggest === "to" && Boolean(journey.to.trim()),
+  );
+  const showFromSuggest =
+    suggest === "from" && (typed ? Boolean(journey.from.trim()) : fromRecentsState.recents.length > 0);
+  const showToSuggest =
+    suggest === "to" && (typed ? Boolean(journey.to.trim()) : toRecentsState.recents.length > 0);
 
   return (
     <main className="cart-page">
@@ -44,62 +113,213 @@ export function CartPage({ bag, journey, stop, setQty, onBack, onEditJourney, on
           <p>Review your selected items and proceed to pay</p>
         </div>
 
-        <section className="cart-journey" aria-label="Journey details">
+        <section className="cart-journey" aria-label="Journey details" ref={suggestRef}>
           <div className="cart-journey-row cart-journey-route">
-            <JourneyField icon={imgBoardingTheCityBus11} label="From" value={journey.from} />
+            <div className="cart-journey-field-wrap">
+              <JourneyTextField
+                icon={imgBoardingTheCityBus11}
+                label="From"
+                value={journey.from}
+                onFocus={() => {
+                  setSuggest("from");
+                  setTyped(false);
+                }}
+                onChange={(next) => {
+                  setJourney((current) => ({ ...current, from: next }));
+                  setSuggest("from");
+                  setTyped(true);
+                }}
+              />
+              {showFromSuggest ? (
+                <CartPlaceSuggest
+                  query={typed ? journey.from : ""}
+                  recents={fromRecentsState.recents}
+                  popularTitle="Popular Boarding Points near you"
+                  popular={typed ? fromSuggest.items : []}
+                  popularMeta="Board at"
+                  remoteStatus={typed && journey.from.trim() ? fromSuggest.status : undefined}
+                  onClearRecents={fromRecentsState.clear}
+                  onPick={(name) => {
+                    fromRecentsState.remember(name);
+                    setJourney((current) => ({ ...current, from: name }));
+                    setSuggest(null);
+                    setTyped(false);
+                  }}
+                />
+              ) : null}
+            </div>
             <span className="cart-route-swap" aria-hidden="true"><SwapIcon /></span>
-            <JourneyField icon={imgBoardingTheCityBus11} label="To" value={journey.to} />
+            <div className="cart-journey-field-wrap">
+              <JourneyTextField
+                icon={imgBoardingTheCityBus11}
+                label="To"
+                value={journey.to}
+                onFocus={() => {
+                  setSuggest("to");
+                  setTyped(false);
+                }}
+                onChange={(next) => {
+                  setJourney((current) => ({ ...current, to: next }));
+                  setSuggest("to");
+                  setTyped(true);
+                }}
+              />
+              {showToSuggest ? (
+                <CartPlaceSuggest
+                  query={typed ? journey.to : ""}
+                  recents={toRecentsState.recents}
+                  popularTitle="Popular Dropping Points near you"
+                  popular={typed ? toSuggest.items : []}
+                  popularMeta="Drop at"
+                  remoteStatus={typed && journey.to.trim() ? toSuggest.status : undefined}
+                  excludeBengaluru
+                  onClearRecents={toRecentsState.clear}
+                  onPick={(name) => {
+                    toRecentsState.remember(name);
+                    setJourney((current) => ({ ...current, to: name }));
+                    setSuggest(null);
+                    setTyped(false);
+                  }}
+                />
+              ) : null}
+            </div>
           </div>
           <div className="cart-journey-row">
-            <JourneyField icon={imgRedHattedDeliveryRiderWithParcel1} label="Pickup point" value={journey.pickup} />
+            <JourneyTextField
+              icon={imgRedHattedDeliveryRiderWithParcel1}
+              label="Pickup point"
+              value={FIXED_PICKUP_POINT}
+              onFocus={() => {
+                setSuggest(null);
+                setTyped(false);
+                setJourney((current) =>
+                  current.pickup === FIXED_PICKUP_POINT
+                    ? current
+                    : { ...current, pickup: FIXED_PICKUP_POINT },
+                );
+              }}
+              onChange={() => {
+                setJourney((current) => ({ ...current, pickup: FIXED_PICKUP_POINT }));
+                setSuggest(null);
+                setTyped(false);
+              }}
+            />
             <JourneyField icon={imgColorfulCalendarIconWithCheckmark1} label="Date of journey" value={journeyDate} />
           </div>
           <div className="cart-journey-row cart-journey-last">
-            <JourneyField icon={null} label="Pickup time" value={stop.time} />
             <button className="cart-edit-journey" type="button" onClick={onEditJourney}>
               Edit your Journey <PencilIcon />
             </button>
           </div>
         </section>
 
-        <section className="cart-kitchen" aria-label="Cart items from Lakshmi’s Kitchen">
+        <section className="cart-kitchen" aria-label={`Cart items from ${kitchen.name}`}>
           <div className="cart-kitchen-header">
-            <img className="cart-kitchen-photo" src={imgKitchenLakshmi} alt="" />
+            <img className="cart-kitchen-photo" src={kitchenPhoto(kitchen, imgKitchenLakshmi)} alt="" />
             <div className="cart-kitchen-info">
               <div className="cart-kitchen-title">
-                <strong>Lakshmi’s Kitchen</strong>
-                <span className="cart-veg"><LeafIcon /> Vegetarian</span>
+                <strong>{kitchen.name}</strong>
+                {kitchen.isVegetarian === true ? (
+                  <span className="cart-veg"><LeafIcon /> Vegetarian</span>
+                ) : null}
               </div>
-              <p>Everyday South Indian comfort food</p>
-              <small><span className="cart-offer-icon"><OfferIcon /></span> Meals &amp; homemade snacks</small>
-              <div className="cart-rating"><span>★</span> 4.8 (120+)</div>
+              <p>{kitchen.blurb || "Everyday South Indian comfort food"}</p>
+              <small>
+                <span className="cart-offer-icon"><OfferIcon /></span>{" "}
+                {kitchen.offerLabel || "Meals & homemade snacks"}
+              </small>
+              {kitchen.rating !== null ? (
+                <div className="cart-rating">
+                  <span>★</span> {kitchen.rating}
+                  {kitchen.reviewCount >= 120 ? " (120+)" : kitchen.reviewCount ? ` (${kitchen.reviewCount})` : ""}
+                </div>
+              ) : null}
             </div>
           </div>
 
           <ul className="cart-items">
-            {bag.map(({ meal, qty }) => (
-              <li className="cart-item" key={meal.id}>
-                <img
-                  className="cart-item-photo"
-                  src={meal.id === "lemon-rice" ? mealLemonRice : meal.photo}
-                  alt=""
-                />
-                <div className="cart-item-detail">
-                  <strong>{meal.id === "lemon-rice" ? "Lemon Rice" : meal.name}</strong>
-                  <p>{meal.id === "lemon-rice" ? "Homemade lemon rice with peanuts and mild spices" : meal.description}</p>
-                  <b>{formatRupees(meal.price)}</b>
-                </div>
-                <button className="cart-remove" type="button" aria-label={`Remove ${meal.name}`} onClick={() => setQty(meal.id, 0)}>
-                  <TrashIcon />
-                </button>
-                <div className="cart-quantity">
-                  <button type="button" aria-label={`Decrease ${meal.name} quantity`} onClick={() => setQty(meal.id, qty - 1)}>−</button>
-                  <span>{qty}</span>
-                  <button type="button" aria-label={`Increase ${meal.name} quantity`} onClick={() => setQty(meal.id, qty + 1)}>+</button>
-                </div>
-              </li>
-            ))}
-            {bag.length === 0 ? <li className="cart-empty">Your cart is empty. Add a meal from Lakshmi’s Kitchen.</li> : null}
+            {bag.map(({ meal, qty }, index) => {
+              const pulseKey = Math.max(bagThumbPulse[meal.id] ?? 0, localThumbPulse[meal.id] ?? 0);
+              const pulseMode =
+                (bagThumbPulse[meal.id] ?? 0) >= (localThumbPulse[meal.id] ?? 0)
+                  ? "serve"
+                  : localPulseMode[meal.id] ?? "wobble";
+              const leaving = Boolean(leavingIds[meal.id]);
+
+              return (
+                <li
+                  className={`cart-item is-enter${leaving ? " is-leave" : ""}`}
+                  key={meal.id}
+                  style={{ ["--ck-bag-enter-delay" as string]: `${index * 55}ms` }}
+                  onAnimationEnd={(event) => {
+                    if (event.target !== event.currentTarget || !leaving) return;
+                    setLeavingIds((current) => {
+                      const next = { ...current };
+                      delete next[meal.id];
+                      return next;
+                    });
+                    setQty(meal.id, 0);
+                  }}
+                >
+                  <MealBagThumb meal={meal} pulseKey={pulseKey} pulseMode={pulseMode} />
+                  <div className="cart-item-detail">
+                    <strong>{meal.id === "lemon-rice" ? "Lemon Rice" : meal.name}</strong>
+                    <p>{meal.id === "lemon-rice" ? "Homemade lemon rice with peanuts and mild spices" : meal.description}</p>
+                    <b>{formatRupees(meal.price)}</b>
+                  </div>
+                  <button
+                    className="cart-remove"
+                    type="button"
+                    aria-label={`Remove ${meal.name}`}
+                    onClick={() => {
+                      if (leaving) return;
+                      if (prefersReducedMotion()) {
+                        setQty(meal.id, 0);
+                        return;
+                      }
+                      setLeavingIds((current) => ({ ...current, [meal.id]: true }));
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                  <div className="cart-quantity">
+                    <button
+                      type="button"
+                      aria-label={`Decrease ${meal.name} quantity`}
+                      onClick={() => {
+                        if (leaving) return;
+                        if (qty <= 1) {
+                          if (prefersReducedMotion()) {
+                            setQty(meal.id, 0);
+                            return;
+                          }
+                          setLeavingIds((current) => ({ ...current, [meal.id]: true }));
+                          return;
+                        }
+                        const nonce = Date.now();
+                        setLocalThumbPulse((current) => ({ ...current, [meal.id]: nonce }));
+                        setLocalPulseMode((current) => ({ ...current, [meal.id]: "wobble" }));
+                        setQty(meal.id, qty - 1);
+                      }}
+                    >
+                      −
+                    </button>
+                    <span>{qty}</span>
+                    <button
+                      type="button"
+                      aria-label={`Increase ${meal.name} quantity`}
+                      onClick={() => {
+                        if (leaving) return;
+                        setQty(meal.id, qty + 1);
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+            {bag.length === 0 ? <li className="cart-empty">Your cart is empty. Add a meal from {kitchen.name}.</li> : null}
           </ul>
         </section>
 
@@ -111,12 +331,18 @@ export function CartPage({ bag, journey, stop, setQty, onBack, onEditJourney, on
 
         <section className="cart-bill" aria-label="Bill details">
           <h2>Bill details</h2>
-          <BillRow label={`Items total (${itemCount} items)`} value={formatRupees(subtotal)} highlight />
-          <BillRow label="Delivery Fee" value={formatRupees(deliveryFee)} />
-          <BillRow label="GST & Other Charges" value={formatCartAmount(taxes)} />
+          <BillRow label={`Items subtotal (${itemCount} items)`} value={formatCheckoutMoney(subtotal)} highlight />
+          <BillRow label="GST (18%)" value={formatGstAmount(gst)} />
+          <div className="cart-bill-row">
+            <span>Delivery Fee</span>
+            <span className="ck-fee-pair">
+              <s className="ck-fee-strike">{formatCheckoutMoney(CHECKOUT_DELIVERY_FEE_LIST)}</s>
+              <span className="ck-fee-free">FREE</span>
+            </span>
+          </div>
           <div className="cart-bill-total">
-            <strong>Total amount</strong>
-            <strong>{formatCartAmount(total)}</strong>
+            <strong>Total</strong>
+            <strong>{formatCheckoutMoney(total)}</strong>
           </div>
         </section>
 
@@ -135,8 +361,14 @@ export function CartPage({ bag, journey, stop, setQty, onBack, onEditJourney, on
           <strong>{formatRupees(subtotal)}</strong>
           <span>{itemCount} items</span>
         </div>
-        <button className="cart-proceed" type="button" disabled={bag.length === 0} onClick={onProceed}>
-          Proceed to pay <ProceedIcon />
+        {placeOrderError ? <p className="ck-place-order-error" role="alert">{placeOrderError}</p> : null}
+        <button
+          className="cart-proceed"
+          type="button"
+          disabled={bag.length === 0 || placingOrder}
+          onClick={onProceed}
+        >
+          {placingOrder ? "Opening Cashfree…" : <>Proceed to pay <ProceedIcon /></>}
         </button>
       </footer>
     </main>
@@ -155,12 +387,148 @@ function JourneyField({ icon, label, value }: { icon: string | null; label: stri
   );
 }
 
-function BillRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
-  return <div className={`cart-bill-row${highlight ? " is-highlight" : ""}`}><span>{label}</span><span>{value}</span></div>;
+function JourneyTextField({
+  icon,
+  label,
+  value,
+  onFocus,
+  onChange,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  onFocus: () => void;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="cart-journey-field cart-journey-field--input">
+      <img src={icon} alt="" />
+      <span>
+        <small>{label}</small>
+        <input value={value} aria-label={label} onFocus={onFocus} onChange={(event) => onChange(event.target.value)} />
+      </span>
+    </label>
+  );
 }
 
-function formatCartAmount(value: number) {
-  return Number.isInteger(value) ? formatRupees(value) : `₹${value.toFixed(2)}`;
+function CartPlaceSuggest({
+  query,
+  recents,
+  popularTitle,
+  popular,
+  popularMeta,
+  remoteStatus,
+  excludeBengaluru = false,
+  onClearRecents,
+  onPick,
+}: {
+  query: string;
+  recents: { title: string; action: string }[];
+  popularTitle: string;
+  popular: readonly { title: string; city: string }[];
+  popularMeta: string;
+  remoteStatus?: LocationSuggestStatus;
+  excludeBengaluru?: boolean;
+  onClearRecents: () => void;
+  onPick: (name: string) => void;
+}) {
+  const needle = normalizeJourneySearch(query.trim());
+  const useRemote = remoteStatus !== undefined && remoteStatus !== "idle";
+  const recentHits = recents.filter((item) => {
+    if (!normalizeJourneySearch(item.title).includes(needle)) return false;
+    if (excludeBengaluru && isBengaluruPlace(journeyPickName(item.title))) return false;
+    return true;
+  });
+  const popularHits = useRemote
+    ? popular.filter((item) => !(excludeBengaluru && isBengaluruPlace(item.title)))
+    : popular.filter((item) => {
+        if (!normalizeJourneySearch(`${item.title} ${item.city}`).includes(needle)) return false;
+        if (excludeBengaluru && isBengaluruPlace(item.title)) return false;
+        return true;
+      });
+  const showLoading = remoteStatus === "loading";
+  const showError = remoteStatus === "error";
+  const showEmpty = remoteStatus === "empty" && popularHits.length === 0;
+  if (!recentHits.length && !popularHits.length && !showLoading && !showError && !showEmpty) return null;
+
+  return (
+    <div className="cart-suggest" onMouseDown={(event) => event.preventDefault()}>
+      {recentHits.length > 0 ? (
+        <div className="cart-suggest-section">
+          <div className="cart-suggest-head">
+            <p>Recent searches</p>
+            <button type="button" onClick={onClearRecents}>
+              Clear all
+            </button>
+          </div>
+          {recentHits.map((item) => (
+            <button key={item.title} type="button" className="cart-suggest-row" onClick={() => onPick(journeyPickName(item.title))}>
+              <span className="cart-suggest-icon">
+                <SuggestClockIcon />
+              </span>
+              <span className="cart-suggest-title">{item.title}</span>
+              {item.action ? <span className="cart-suggest-meta">{item.action}</span> : null}
+              <img className="cart-suggest-chevron" src={imgAltArrowDownStreamlineSolarAr} alt="" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {showLoading ? (
+        <div className="cart-suggest-section">
+          <div className="cart-suggest-head">
+            <p>Searching…</p>
+          </div>
+        </div>
+      ) : null}
+      {showError ? (
+        <div className="cart-suggest-section">
+          <div className="cart-suggest-head">
+            <p>Unable to load places</p>
+          </div>
+        </div>
+      ) : null}
+      {showEmpty ? (
+        <div className="cart-suggest-section">
+          <div className="cart-suggest-head">
+            <p>No matching places</p>
+          </div>
+        </div>
+      ) : null}
+      {popularHits.length > 0 ? (
+        <div className="cart-suggest-section">
+          <div className="cart-suggest-head">
+            <p>{popularTitle}</p>
+          </div>
+          {popularHits.map((item) => (
+            <button key={item.title} type="button" className="cart-suggest-row cart-suggest-row--stop" onClick={() => onPick(item.title)}>
+              <span className="cart-suggest-icon">
+                <img src={imgMapPointStreamlineSolar} alt="" />
+              </span>
+              <span className="cart-suggest-copy">
+                <strong>{item.title}</strong>
+                <small>{item.city}</small>
+              </span>
+              <span className="cart-suggest-meta">{popularMeta}</span>
+              <img className="cart-suggest-chevron" src={imgAltArrowDownStreamlineSolarAr} alt="" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SuggestClockIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.25" stroke="#FF4B2B" strokeWidth="1.5" />
+      <path d="M12 7.75V12.1L15.1 14.15" stroke="#FF4B2B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BillRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return <div className={`cart-bill-row${highlight ? " is-highlight" : ""}`}><span>{label}</span><span>{value}</span></div>;
 }
 
 function ChevronLeftIcon() {

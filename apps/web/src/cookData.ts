@@ -28,52 +28,8 @@ export type Meal = {
   pack?: string;
 };
 
-export const COOKS: Cook[] = [
-  {
-    id: "lakshmi",
-    name: "Lakshmi’s Kitchen",
-    blurb: "Everyday South Indian comfort food",
-    offerLabel: "Meals & homemade snacks",
-    offer: "meals-snacks",
-    fromPrice: 60,
-    pickupLabel: "Available for 1:00 PM pickup",
-    photo: cooks.cookLakshmi,
-    hasMenu: true,
-  },
-  {
-    id: "meena",
-    name: "Meena’s Home Food",
-    blurb: "Familiar flavours, freshly prepared",
-    offerLabel: "Meals & crispy homemade snacks",
-    offer: "meals-snacks",
-    fromPrice: 60,
-    pickupLabel: "Available for 1:00 PM pickup",
-    photo: cooks.cookMeena,
-    hasMenu: false,
-  },
-  {
-    id: "agalya",
-    name: "Agalya’s Kitchen",
-    blurb: "Home-style favourites for your journey",
-    offerLabel: "Meals & homemade snacks",
-    offer: "meals-snacks",
-    fromPrice: 100,
-    pickupLabel: "Available for 1:00 PM pickup",
-    photo: cooks.cookAgalya,
-    hasMenu: false,
-  },
-  {
-    id: "padma",
-    name: "Padma’s Kitchen",
-    blurb: "Simple meals, made with care",
-    offerLabel: "Breakfast, lunch & snacks",
-    offer: "meals-snacks",
-    fromPrice: 80,
-    pickupLabel: "Available for 1:00 PM pickup",
-    photo: cooks.cookPadma,
-    hasMenu: false,
-  },
-];
+/** Listing data now comes from GET /api/v1/kitchens. Kept only as seed reference. */
+export const COOKS: Cook[] = [];
 
 export const LAKSHMI_MEALS: Meal[] = [
   {
@@ -174,26 +130,52 @@ export const LAKSHMI_MEALS: Meal[] = [
 export const FROM_CITIES = ["Bangalore", "Hyderabad", "Chennai", "Kochi", "Coimbatore"] as const;
 export const TO_CITIES = ["Chennai", "Salem", "Hyderabad", "Kochi", "Coimbatore"] as const;
 
+export const FIXED_PICKUP_POINT = "Bangalore";
+
 export const PICKUP_STOPS = [
   {
-    name: "Hosur",
+    name: FIXED_PICKUP_POINT,
     time: "1:00 PM",
-    title: "Hosur · Food pickup stop",
-    detail: "Collect near the main entrance, Hosur bus stand",
-  },
-  {
-    name: "Krishnagiri",
-    time: "2:30 PM",
-    title: "Krishnagiri · Food pickup stop",
-    detail: "Collect near the main entrance, Krishnagiri bus stand",
-  },
-  {
-    name: "Vellore",
-    time: "4:30 PM",
-    title: "Vellore · Food pickup stop",
-    detail: "Collect near the main entrance, Vellore bus stand",
+    title: "Bangalore · Food pickup stop",
+    detail: "Collect near the main entrance, Bangalore bus stand",
   },
 ] as const;
+
+/** Mock recent lists removed — From/To recents are persisted from real selections. */
+export const JOURNEY_FROM_RECENTS: readonly { title: string; action: string }[] = [];
+
+export const JOURNEY_FROM_BOARDING = [
+  { title: "Anand Rao Circle", city: "Bengaluru" },
+  { title: "Madiwala", city: "Bengaluru" },
+  { title: "K R Puram", city: "Bengaluru" },
+  { title: "Majestic (Kempegowda)", city: "Bengaluru" },
+] as const;
+
+export const JOURNEY_TO_RECENTS: readonly { title: string; action: string }[] = [];
+
+export const JOURNEY_TO_DROPPING = [
+  { title: "Chennai Central", city: "Chennai" },
+  { title: "Koyambedu", city: "Chennai" },
+  { title: "Tambaram", city: "Chennai" },
+  { title: "Guindy", city: "Chennai" },
+] as const;
+
+export const JOURNEY_PICKUP_RECENTS = [
+  { title: FIXED_PICKUP_POINT, action: "Pick up" },
+] as const;
+
+export const JOURNEY_PICKUP_POPULAR = PICKUP_STOPS.map((stop) => ({
+  title: stop.name,
+  city: stop.detail,
+}));
+
+export function normalizeJourneySearch(value: string) {
+  return value.toLowerCase().replace(/bengalur[ue]/g, "bangalore");
+}
+
+export function journeyPickName(title: string) {
+  return title.includes(" - ") ? title.split(" - ")[0] : title;
+}
 
 export type JourneyChoice = {
   from: string;
@@ -203,11 +185,15 @@ export type JourneyChoice = {
 };
 
 export const INITIAL_JOURNEY: JourneyChoice = {
-  from: "Bangalore",
-  to: "Chennai",
-  pickup: "Hosur",
+  from: "",
+  to: "",
+  pickup: FIXED_PICKUP_POINT,
   date: new Date(2026, 9, 18),
 };
+
+export function isBengaluruPlace(name: string) {
+  return /^(bengalur[ue]|bangalore)$/i.test(name.trim());
+}
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = [
