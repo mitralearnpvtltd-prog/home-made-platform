@@ -9,6 +9,8 @@ export type DishListItem = {
   description: string | null;
   /** Kitchen-supplied spice; null when the kitchen has not specified one. */
   spiceLevel: DishSpiceLevel | null;
+  /** Kitchen-supplied allergen labels; empty when none have been provided. */
+  allergens: string[];
   categoryCode: string | null;
   sortOrder: number;
   isAvailable: boolean;
@@ -24,5 +26,6 @@ export type DishQueryRow = {
   spice_level: string | null;
   sort_order: number;
   is_available: boolean;
+  allergens: { label: string }[] | null;
   category: { code: string } | { code: string }[] | null;
 };

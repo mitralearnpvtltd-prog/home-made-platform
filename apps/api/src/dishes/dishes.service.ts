@@ -21,6 +21,9 @@ const DISH_SELECT = `
   spice_level,
   sort_order,
   is_available,
+  allergens:dish_allergens (
+    label
+  ),
   category:food_categories (
     code
   )
@@ -151,7 +154,7 @@ export class DishesService {
     this.logger.error(`${logMessage}: ${errorMessage}`);
     if (/permission denied|42501/i.test(errorMessage)) {
       throw new ServiceUnavailableException(
-        'Menu catalogue is not readable. Ensure kitchens/dishes SELECT grants and available-dish RLS policies are applied.',
+        'Menu catalogue is not readable. Ensure kitchens/dishes/allergen SELECT grants and available-dish RLS policies are applied.',
       );
     }
     throw new InternalServerErrorException(`${fallback}. Please try again.`);
@@ -167,6 +170,10 @@ export class DishesService {
       price: Number(row.price),
       description: row.description,
       spiceLevel: this.mapSpiceLevel(row.spice_level),
+      allergens: (row.allergens ?? [])
+        .map((allergen) => allergen.label.trim())
+        .filter((label) => label.length > 0)
+        .sort((left, right) => left.localeCompare(right)),
       categoryCode: category?.code ?? null,
       sortOrder: Number(row.sort_order ?? 0),
       isAvailable: Boolean(row.is_available),

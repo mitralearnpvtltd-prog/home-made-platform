@@ -1,25 +1,25 @@
 import { Transform } from 'class-transformer';
 import {
   ArrayMinSize,
+  ArrayMaxSize,
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsEmail,
   IsIn,
-  IsInt,
-  IsOptional,
   IsString,
   Matches,
-  Max,
   MaxLength,
-  Min,
   MinLength,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
+import { WEEKDAYS } from '../applications.constants';
 import {
-  COOK_FOOD_CATEGORIES,
-  COOK_FOOD_TYPES,
-  WEEKDAYS,
-} from '../applications.constants';
+  isValidAvailabilitySchedule,
+  type AvailabilityByDay,
+} from '../availability-schedule';
 
 function toTrimmedString({ value }: { value: unknown }): unknown {
   return typeof value === 'string' ? value.trim() : value;
@@ -40,20 +40,32 @@ function parseJsonArray({ value }: { value: unknown }): unknown {
   return value;
 }
 
-function toBoolean({ value }: { value: unknown }): unknown {
-  if (typeof value === 'boolean') return value;
-  if (value === 'true' || value === '1') return true;
-  if (value === 'false' || value === '0') return false;
-  return value;
+function parseTrimmedStringArray({ value }: { value: unknown }): unknown {
+  const parsed = parseJsonArray({ value });
+  return Array.isArray(parsed)
+    ? parsed.map((item) => (typeof item === 'string' ? item.trim() : item))
+    : parsed;
 }
 
-function toInt({ value }: { value: unknown }): unknown {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? value : parsed;
+@ValidatorConstraint({ name: 'isValidAvailabilityByDay', async: false })
+class IsValidAvailabilityByDayConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown, args: ValidationArguments): boolean {
+    const application = args.object as {
+      availableDays?: unknown;
+      availabilityMode?: unknown;
+    };
+    return isValidAvailabilitySchedule(
+      application.availableDays,
+      application.availabilityMode,
+      value,
+    );
   }
-  return value;
+
+  defaultMessage(): string {
+    return 'Provide valid availability times for every selected day.';
+  }
 }
 
 export class SubmitCookApplicationDto {
@@ -65,9 +77,10 @@ export class SubmitCookApplicationDto {
 
   @Transform(({ value }) => {
     if (typeof value !== 'string') return value;
+    if (!/^[+\d\s().-]+$/.test(value)) return value;
     const digits = value.replace(/\D/g, '');
     if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
-    return digits.slice(-10);
+    return digits;
   })
   @IsString()
   @Matches(/^[6-9]\d{9}$/, {
@@ -85,18 +98,6 @@ export class SubmitCookApplicationDto {
   @Transform(toTrimmedString)
   @IsString()
   @MinLength(2)
-  @MaxLength(120)
-  kitchenName!: string;
-
-  @Transform(toTrimmedString)
-  @IsString()
-  @MinLength(5)
-  @MaxLength(500)
-  kitchenAddress!: string;
-
-  @Transform(toTrimmedString)
-  @IsString()
-  @MinLength(2)
   @MaxLength(80)
   city!: string;
 
@@ -105,55 +106,23 @@ export class SubmitCookApplicationDto {
   @Matches(/^[1-9][0-9]{5}$/, { message: 'Pincode must be a valid 6-digit Indian PIN.' })
   pincode!: string;
 
-  @Transform(toInt)
-  @IsInt()
-  @Min(0)
-  @Max(80)
-  yearsExperience!: number;
-
-  @Transform(parseJsonArray)
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayUnique()
-  @IsIn([...COOK_FOOD_TYPES], { each: true })
-  foodTypes!: string[];
-
-  @Transform(parseJsonArray)
-  @IsArray()
-  @ArrayMinSize(1)
-  @ArrayUnique()
-  @IsIn([...COOK_FOOD_CATEGORIES], { each: true })
-  foodCategories!: string[];
-
-  @IsOptional()
-  @Transform(toTrimmedString)
-  @IsString()
-  @MaxLength(2000)
-  specialDishes?: string;
-
   @Transform(toTrimmedString)
   @IsIn(['vegetarian', 'non_vegetarian', 'both'])
   foodPreference!: 'vegetarian' | 'non_vegetarian' | 'both';
 
-  @IsOptional()
-  @Transform(toTrimmedString)
-  @IsString()
-  @MaxLength(40)
-  fssaiRegistrationNumber?: string;
-
-  @Transform(toTrimmedString)
-  @IsString()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
-    message: 'Kitchen opening time must be HH:MM (24-hour).',
-  })
-  kitchenOpeningTime!: string;
-
-  @Transform(toTrimmedString)
-  @IsString()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
-    message: 'Kitchen closing time must be HH:MM (24-hour).',
-  })
-  kitchenClosingTime!: string;
+  @Transform(parseTrimmedStringArray)
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Select at least one food reference.' })
+  @ArrayMaxSize(30)
+  @ArrayUnique(
+    (dish: unknown) =>
+      typeof dish === 'string' ? dish.toLocaleLowerCase() : dish,
+    { message: 'Food references must not contain duplicates.' },
+  )
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(100, { each: true })
+  foodReferences!: string[];
 
   @Transform(parseJsonArray)
   @IsArray()
@@ -162,7 +131,10 @@ export class SubmitCookApplicationDto {
   @IsIn([...WEEKDAYS], { each: true })
   availableDays!: string[];
 
-  @Transform(toBoolean)
-  @IsBoolean()
-  termsAccepted!: boolean;
+  @Transform(toTrimmedString)
+  @IsIn(['shared'])
+  availabilityMode!: 'shared';
+
+  @Validate(IsValidAvailabilityByDayConstraint)
+  availabilityByDay!: AvailabilityByDay;
 }

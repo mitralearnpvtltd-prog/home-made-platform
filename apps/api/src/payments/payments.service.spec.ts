@@ -114,6 +114,95 @@ describe('PaymentsService webhook signature handling', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('applies a payment before recording its webhook event so failed applies can retry', async () => {
+    const orderId = '11111111-1111-1111-1111-111111111111';
+    const order = {
+      id: orderId,
+      user_id: '22222222-2222-2222-2222-222222222222',
+      order_number: 'A-1001',
+      kitchen_id: '33333333-3333-3333-3333-333333333333',
+      payment_status: 'pending',
+      collector_name: 'Mitra',
+      collector_phone: '9876543210',
+      total: 118,
+      currency: 'INR',
+      cashfree_order_id: `aahaa_${orderId}_1`,
+      cashfree_cf_order_id: null,
+      cashfree_payment_session_id: 'session_1',
+      cashfree_payment_id: null,
+      payment_session_created_at: null,
+      payment_verified_at: null,
+    };
+    const orderQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn(async () => ({ data: order, error: null })),
+    };
+    const rpcCalls: string[] = [];
+    let failFirstApply = true;
+    const rpc = jest.fn(async (name: string) => {
+      rpcCalls.push(name);
+      if (name === 'order_apply_payment_result' && failFirstApply) {
+        failFirstApply = false;
+        return { data: null, error: { message: 'temporary database failure' } };
+      }
+      if (name === 'order_apply_payment_result') {
+        return {
+          data: [{
+            applied: true,
+            order_id: orderId,
+            payment_status: 'paid',
+            already_paid: false,
+          }],
+          error: null,
+        };
+      }
+      return { data: true, error: null };
+    });
+    const service = new PaymentsService(
+      { get: () => 'http://localhost:5173' } as never,
+      {
+        verifyWebhookSignature: (_signature: string, raw: string) => ({
+          object: JSON.parse(raw),
+        }),
+      } as never,
+      {
+        rpc,
+        from: jest.fn(() => orderQuery),
+      } as never,
+    );
+    const rawBody = JSON.stringify({
+      type: 'PAYMENT_SUCCESS_WEBHOOK',
+      event_id: 'evt_retry',
+      data: {
+        order: {
+          order_id: `aahaa_${orderId}_1`,
+          order_amount: 118,
+          order_currency: 'INR',
+          order_status: 'PAID',
+        },
+        payment: {
+          cf_payment_id: 'pay_retry',
+          payment_status: 'SUCCESS',
+        },
+      },
+    });
+
+    await expect(
+      service.handleWebhook('valid-signature', '1700000002', rawBody),
+    ).rejects.toThrow();
+    expect(rpcCalls).toEqual(['order_apply_payment_result']);
+
+    await expect(
+      service.handleWebhook('valid-signature', '1700000002', rawBody),
+    ).resolves.toEqual({ ok: true });
+    expect(rpcCalls).toEqual([
+      'order_apply_payment_result',
+      'order_apply_payment_result',
+      'payment_webhook_event_record',
+    ]);
+  });
+
   it('returns duplicate for already-recorded webhook events', async () => {
     const adminRpc = jest.fn(async () => ({ data: false, error: null }));
     const service = new PaymentsService(
@@ -133,6 +222,75 @@ describe('PaymentsService webhook signature handling', () => {
     const result = await service.handleWebhook(signature, timestamp, rawBody);
     expect(result).toEqual({ ok: true, duplicate: true });
     expect(createHash('sha256').update(rawBody).digest('hex')).toHaveLength(64);
+  });
+});
+
+describe('PaymentsService payment confirmation entry points', () => {
+  it('routes authenticated verification through the shared payment transition RPC', async () => {
+    const orderId = '11111111-1111-1111-1111-111111111111';
+    const orderQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn(async () => ({
+        data: {
+          id: orderId,
+          user_id: 'customer-1',
+          order_number: 'A-1001',
+          kitchen_id: 'kitchen-1',
+          payment_status: 'pending',
+          collector_name: 'Mitra',
+          collector_phone: '9876543210',
+          total: 118,
+          currency: 'INR',
+          cashfree_order_id: 'cashfree-order-1',
+          cashfree_cf_order_id: null,
+          cashfree_payment_session_id: 'session-1',
+          cashfree_payment_id: null,
+          payment_session_created_at: null,
+          payment_verified_at: null,
+        },
+        error: null,
+      })),
+    };
+    const rpc = jest.fn(async () => ({
+      data: [{
+        applied: true,
+        order_id: orderId,
+        payment_status: 'paid',
+        already_paid: false,
+      }],
+      error: null,
+    }));
+    const service = new PaymentsService(
+      { get: () => undefined } as never,
+      {
+        fetchOrder: jest.fn(async () => ({
+          orderId: 'cashfree-order-1',
+          cfOrderId: 'cf-order-1',
+          paymentSessionId: 'session-1',
+          orderStatus: 'PAID',
+          orderAmount: 118,
+          orderCurrency: 'INR',
+        })),
+        fetchLatestPaymentId: jest.fn(async () => 'payment-1'),
+      } as never,
+      {
+        rpc,
+        from: jest.fn(() => orderQuery),
+      } as never,
+    );
+
+    await expect(service.verifyPayment('customer-1', orderId)).resolves.toMatchObject({
+      paymentStatus: 'paid',
+      verified: true,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      'order_apply_payment_result',
+      expect.objectContaining({
+        p_order_id: orderId,
+        p_payment_status: 'paid',
+      }),
+    );
   });
 });
 

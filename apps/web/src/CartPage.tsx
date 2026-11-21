@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { imgBusStop } from "./assets/cooks";
 import {
   imgAltArrowDownStreamlineSolarAr,
@@ -24,6 +24,9 @@ import {
   formatCheckoutMoney,
   formatGstAmount,
 } from "./lib/checkoutFees";
+import { getMyProfile } from "./lib/api";
+import { cacheProfile, getAccessToken, readCachedProfile } from "./lib/authSession";
+import { normalizePhoneDigits } from "./lib/profileDisplay";
 import { useLocationRecents } from "./lib/useLocationRecents";
 import { useLocationSuggest, type LocationSuggestStatus } from "./lib/useLocationSuggest";
 import { MealBagThumb } from "./MealBagThumb";
@@ -44,6 +47,16 @@ type CartPageProps = {
   onBack: () => void;
   onEditJourney: () => void;
   onProceed: () => void;
+  orderingFor: "myself" | "someone-else" | null;
+  setOrderingFor: (value: "myself" | "someone-else" | null) => void;
+  pickupName: string;
+  setPickupName: (name: string) => void;
+  pickupPhone: string;
+  setPickupPhone: (phone: string) => void;
+  someoneElseName: string;
+  setSomeoneElseName: (name: string) => void;
+  someoneElsePhone: string;
+  setSomeoneElsePhone: (phone: string) => void;
   placingOrder?: boolean;
   placeOrderError?: string;
 };
@@ -63,6 +76,16 @@ export function CartPage({
   onBack,
   onEditJourney,
   onProceed,
+  orderingFor,
+  setOrderingFor,
+  pickupName,
+  setPickupName,
+  pickupPhone,
+  setPickupPhone,
+  someoneElseName,
+  setSomeoneElseName,
+  someoneElsePhone,
+  setSomeoneElsePhone,
   placingOrder = false,
   placeOrderError = "",
 }: CartPageProps) {
@@ -93,6 +116,59 @@ export function CartPage({
     suggest === "from" && (typed ? Boolean(journey.from.trim()) : fromRecentsState.recents.length > 0);
   const showToSuggest =
     suggest === "to" && (typed ? Boolean(journey.to.trim()) : toRecentsState.recents.length > 0);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
+  useEffect(() => {
+    if (orderingFor !== "myself" || !window.matchMedia("(max-width: 767px)").matches) return;
+
+    let cancelled = false;
+    const cached = readCachedProfile();
+    const cachedName = cached?.fullName?.trim() ?? "";
+    const cachedPhone = cached?.phone ? formatCollectorPhone(cached.phone) : "";
+    setPickupName(cachedName);
+    setPickupPhone(cachedPhone);
+    setProfileError("");
+    setProfileLoading(Boolean(getAccessToken()));
+
+    if (!getAccessToken()) return;
+
+    void getMyProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        cacheProfile(profile);
+        setPickupName(profile.fullName?.trim() ?? "");
+        setPickupPhone(profile.phone ? formatCollectorPhone(profile.phone) : "");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProfileError("Could not load your registered details. Please try again or choose someone else.");
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderingFor, setPickupName, setPickupPhone]);
+
+  function chooseCollector(value: "myself" | "someone-else") {
+    setOrderingFor(value);
+    setProfileError("");
+    if (value === "someone-else") {
+      setPickupName(someoneElseName);
+      setPickupPhone(someoneElsePhone);
+    } else {
+      setPickupName("");
+      setPickupPhone("");
+    }
+  }
+
+  function formatCollectorPhone(phone: string) {
+    const digits = normalizePhoneDigits(phone);
+    return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : phone.trim();
+  }
 
   return (
     <main className="cart-page">
@@ -344,6 +420,72 @@ export function CartPage({
             <strong>Total</strong>
             <strong>{formatCheckoutMoney(total)}</strong>
           </div>
+        </section>
+
+        <section className="cart-collector" aria-labelledby="cart-collector-title">
+          <h2 id="cart-collector-title">Who&apos;s collecting?</h2>
+          <div className="cart-collector-options" role="group" aria-label="Who is collecting the order">
+            <button
+              type="button"
+              className={orderingFor === "myself" ? "is-selected" : undefined}
+              aria-pressed={orderingFor === "myself"}
+              onClick={() => chooseCollector("myself")}
+            >
+              Myself
+            </button>
+            <button
+              type="button"
+              className={orderingFor === "someone-else" ? "is-selected" : undefined}
+              aria-pressed={orderingFor === "someone-else"}
+              onClick={() => chooseCollector("someone-else")}
+            >
+              For someone else
+            </button>
+          </div>
+          {orderingFor === "myself" ? (
+            <div className="cart-collector-details" aria-live="polite">
+              {profileLoading ? <p>Loading registered details…</p> : pickupName && pickupPhone ? (
+                <>
+                  <p><span>Name</span><strong>{pickupName}</strong></p>
+                  <p><span>Mobile number</span><strong>{pickupPhone}</strong></p>
+                  {profileError ? <p role="alert">{profileError} Showing the saved details.</p> : null}
+                </>
+              ) : (
+                <p role={profileError ? "alert" : undefined}>
+                  {profileError || "Please sign in or choose someone else to enter collector details."}
+                </p>
+              )}
+            </div>
+          ) : null}
+          {orderingFor === "someone-else" ? (
+            <div className="cart-collector-fields">
+              <label>
+                Name
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={someoneElseName}
+                  onChange={(event) => {
+                    setSomeoneElseName(event.target.value);
+                    setPickupName(event.target.value);
+                  }}
+                />
+              </label>
+              <label>
+                Mobile number
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={someoneElsePhone}
+                  onChange={(event) => {
+                    setSomeoneElsePhone(event.target.value);
+                    setPickupPhone(event.target.value);
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
         </section>
 
         <section className="cart-pickup">

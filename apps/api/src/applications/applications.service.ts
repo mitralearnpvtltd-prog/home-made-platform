@@ -11,22 +11,21 @@ import { randomBytes } from 'node:crypto';
 import { normalizeIndianPhone } from '../auth/auth.utils';
 import { SUPABASE_ADMIN_CLIENT } from '../supabase/supabase.constants';
 import {
-  ALLOWED_PROFILE_PHOTO_MIME,
+  getAvailabilityRange,
+  isValidAvailabilitySchedule,
+} from './availability-schedule';
+import {
   APPLICATION_PHOTO_BUCKET,
   APPLICATION_RETENTION_DAYS,
-  MAX_PROFILE_PHOTO_BYTES,
   type ApplicationStatus,
 } from './applications.constants';
 import type { ReviewApplicationDto } from './dto/review-application.dto';
 import type { SubmitCookApplicationDto } from './dto/submit-cook-application.dto';
 import type { SubmitDeliveryPartnerApplicationDto } from './dto/submit-delivery-partner-application.dto';
-
-type UploadedPhoto = {
-  buffer: Buffer;
-  mimetype: string;
-  originalname: string;
-  size: number;
-};
+import {
+  isValidAvailableDays,
+  isValidWorkingHours,
+} from './delivery-application.validation';
 
 @Injectable()
 export class ApplicationsService {
@@ -37,12 +36,26 @@ export class ApplicationsService {
 
   async submitCookApplication(
     dto: SubmitCookApplicationDto,
-    photo: UploadedPhoto | undefined,
   ) {
-    this.assertTermsAccepted(dto.termsAccepted);
-    this.assertClosingAfterOpening(dto.kitchenOpeningTime, dto.kitchenClosingTime);
+    if (
+      dto.availabilityMode !== 'shared' ||
+      !isValidAvailabilitySchedule(
+        dto.availableDays,
+        dto.availabilityMode,
+        dto.availabilityByDay,
+      )
+    ) {
+      throw new BadRequestException(
+        'Provide valid availability times for every selected day.',
+      );
+    }
+    const availabilityRange = getAvailabilityRange(dto.availabilityByDay);
+    if (!availabilityRange) {
+      throw new BadRequestException(
+        'Select at least one valid kitchen availability day.',
+      );
+    }
     const client = this.requireAdmin();
-    const photoPath = await this.uploadProfilePhoto(client, 'cook', photo);
     const mobile = normalizeIndianPhone(dto.mobileNumber);
     const email = dto.email.trim().toLowerCase();
     const applicationId = this.buildApplicationId('CK');
@@ -59,28 +72,21 @@ export class ApplicationsService {
         mobile_normalized: mobile,
         email: dto.email.trim(),
         email_normalized: email,
-        profile_photo_path: photoPath ?? null,
-        kitchen_name: dto.kitchenName,
-        kitchen_address: dto.kitchenAddress,
         city: dto.city,
         pincode: dto.pincode,
-        years_experience: dto.yearsExperience,
-        food_types: dto.foodTypes,
-        food_categories: dto.foodCategories,
-        special_dishes: dto.specialDishes?.trim() || null,
         food_preference: dto.foodPreference,
-        fssai_registration_number: dto.fssaiRegistrationNumber?.trim() || null,
-        kitchen_opening_time: `${dto.kitchenOpeningTime}:00`,
-        kitchen_closing_time: `${dto.kitchenClosingTime}:00`,
+        food_references: dto.foodReferences,
+        availability_mode: dto.availabilityMode,
+        availability_by_day: dto.availabilityByDay,
+        kitchen_opening_time: `${availabilityRange.from}:00`,
+        kitchen_closing_time: `${availabilityRange.until}:00`,
         available_days: dto.availableDays,
-        terms_accepted_at: now.toISOString(),
         retention_until: retentionUntil.toISOString(),
       })
       .select('id, application_id, status, created_at')
       .single();
 
     if (error) {
-      if (photoPath) await this.safeRemovePhoto(client, photoPath);
       this.throwInsertError(error, 'cook');
     }
 
@@ -95,12 +101,74 @@ export class ApplicationsService {
 
   async submitDeliveryPartnerApplication(
     dto: SubmitDeliveryPartnerApplicationDto,
-    photo: UploadedPhoto | undefined,
   ) {
-    this.assertTermsAccepted(dto.termsAccepted);
+    if (!isValidAvailableDays(dto.availableDaysMode, dto.availableDays)) {
+      throw new BadRequestException(
+        'Choose working days that match the selected option.',
+      );
+    }
+    if (
+      !isValidWorkingHours(
+        dto.workingHoursMode,
+        dto.availableFrom,
+        dto.availableUntil,
+      )
+    ) {
+      throw new BadRequestException(
+        'Working hours must be within 6:00 PM–9:00 PM and end after they start.',
+      );
+    }
+    const vehicleType = dto.ownsVehicle ? dto.vehicleType : undefined;
+    const registration = dto.vehicleRegistrationNumber?.trim();
+    const otherVehicleDescription = dto.otherVehicleDescription?.trim();
+    const hasVehicleDetails = Boolean(
+      dto.vehicleType || registration || otherVehicleDescription,
+    );
+    if (!dto.ownsVehicle && hasVehicleDetails) {
+      throw new BadRequestException(
+        'Vehicle details can only be provided when you own a vehicle.',
+      );
+    }
 
+    const supportedVehicleTypes = ['bike', 'car', 'auto', 'other'];
+    if (dto.ownsVehicle && !supportedVehicleTypes.includes(vehicleType ?? '')) {
+      throw new BadRequestException('Select which vehicle you own.');
+    }
+
+    let vehicleRegistrationNumber: string | undefined;
+    let savedOtherVehicleDescription: string | undefined;
+    if (dto.ownsVehicle && vehicleType === 'other') {
+      if (registration) {
+        throw new BadRequestException(
+          'A registration number is not needed for an Other vehicle type.',
+        );
+      }
+      if (
+        !otherVehicleDescription ||
+        otherVehicleDescription.length < 2 ||
+        otherVehicleDescription.length > 80
+      ) {
+        throw new BadRequestException('Specify your vehicle type.');
+      }
+      savedOtherVehicleDescription = otherVehicleDescription;
+    } else if (dto.ownsVehicle) {
+      if (
+        !registration ||
+        registration.length < 4 ||
+        registration.length > 20
+      ) {
+        throw new BadRequestException(
+          'Enter your vehicle registration number.',
+        );
+      }
+      if (otherVehicleDescription) {
+        throw new BadRequestException(
+          'A vehicle description is only allowed for Other.',
+        );
+      }
+      vehicleRegistrationNumber = registration.toUpperCase();
+    }
     const client = this.requireAdmin();
-    const photoPath = await this.uploadProfilePhoto(client, 'delivery', photo);
     const mobile = normalizeIndianPhone(dto.mobileNumber);
     const email = dto.email.trim().toLowerCase();
     const applicationId = this.buildApplicationId('DP');
@@ -117,23 +185,25 @@ export class ApplicationsService {
         mobile_normalized: mobile,
         email: dto.email.trim(),
         email_normalized: email,
-        profile_photo_path: photoPath ?? null,
-        current_address: dto.currentAddress,
         city: dto.city,
         pincode: dto.pincode,
-        vehicle_registration_number: dto.vehicleRegistrationNumber.toUpperCase(),
-        driving_license_number: dto.drivingLicenseNumber.toUpperCase(),
-        preferred_delivery_area: dto.preferredDeliveryArea,
+        owns_vehicle: dto.ownsVehicle,
+        vehicle_type: dto.ownsVehicle ? vehicleType : null,
+        vehicle_registration_number: vehicleRegistrationNumber ?? null,
+        other_vehicle_description: savedOtherVehicleDescription ?? null,
+        can_arrange_vehicle: null,
         available_days: dto.availableDays,
-        work_preference: dto.workPreference,
-        terms_accepted_at: now.toISOString(),
+        available_days_mode: dto.availableDaysMode,
+        work_preference: null,
+        working_hours_mode: dto.workingHoursMode,
+        available_from: dto.availableFrom,
+        available_until: dto.availableUntil,
         retention_until: retentionUntil.toISOString(),
       })
       .select('id, application_id, status, created_at')
       .single();
 
     if (error) {
-      if (photoPath) await this.safeRemovePhoto(client, photoPath);
       this.throwInsertError(error, 'delivery');
     }
 
@@ -151,7 +221,7 @@ export class ApplicationsService {
     let query = client
       .from('cook_applications')
       .select(
-        'id, application_id, status, full_name, mobile_number, email, kitchen_name, city, food_preference, created_at, reviewed_at',
+        'id, application_id, status, full_name, mobile_number, email, city, food_preference, created_at, reviewed_at',
       )
       .order('created_at', { ascending: false });
     if (status) query = query.eq('status', status);
@@ -225,7 +295,14 @@ export class ApplicationsService {
       fssaiRegistrationNumber: data.fssai_registration_number,
       kitchenOpeningTime: data.kitchen_opening_time,
       kitchenClosingTime: data.kitchen_closing_time,
+      availableFrom: data.kitchen_opening_time,
+      availableUntil: data.kitchen_closing_time,
       availableDays: data.available_days,
+      availabilityMode: data.availability_mode ?? 'shared',
+      availabilityByDay: data.availability_by_day ?? {},
+      foodReferences:
+        data.food_references ??
+        (data.special_dishes ? [String(data.special_dishes)] : []),
       termsAcceptedAt: data.terms_accepted_at,
       retentionUntil: data.retention_until,
       reviewedAt: data.reviewed_at,
@@ -260,11 +337,19 @@ export class ApplicationsService {
       currentAddress: data.current_address,
       city: data.city,
       pincode: data.pincode,
+      ownsVehicle: data.owns_vehicle,
+      vehicleType: data.vehicle_type,
       vehicleRegistrationNumber: data.vehicle_registration_number,
+      otherVehicleDescription: data.other_vehicle_description,
+      canArrangeVehicle: data.can_arrange_vehicle,
       drivingLicenseNumber: data.driving_license_number,
       preferredDeliveryArea: data.preferred_delivery_area,
       availableDays: data.available_days,
+      availableDaysMode: data.available_days_mode,
       workPreference: data.work_preference,
+      workingHoursMode: data.working_hours_mode,
+      availableFrom: data.available_from,
+      availableUntil: data.available_until,
       termsAcceptedAt: data.terms_accepted_at,
       retentionUntil: data.retention_until,
       reviewedAt: data.reviewed_at,
@@ -339,45 +424,6 @@ export class ApplicationsService {
     };
   }
 
-  private async uploadProfilePhoto(
-    client: SupabaseClient,
-    kind: 'cook' | 'delivery',
-    photo: UploadedPhoto | undefined,
-  ): Promise<string | null> {
-    if (!photo) {
-      return null;
-    }
-    if (photo.size <= 0 || photo.size > MAX_PROFILE_PHOTO_BYTES) {
-      throw new BadRequestException('Profile photo must be an image up to 5 MB.');
-    }
-    if (!ALLOWED_PROFILE_PHOTO_MIME.has(photo.mimetype)) {
-      throw new BadRequestException('Profile photo must be JPEG, PNG, or WebP.');
-    }
-
-    const extension =
-      photo.mimetype === 'image/png'
-        ? 'png'
-        : photo.mimetype === 'image/webp'
-          ? 'webp'
-          : 'jpg';
-    const path = `${kind}/${new Date().toISOString().slice(0, 10)}/${randomBytes(16).toString('hex')}.${extension}`;
-
-    const { error } = await client.storage
-      .from(APPLICATION_PHOTO_BUCKET)
-      .upload(path, photo.buffer, {
-        contentType: photo.mimetype,
-        upsert: false,
-      });
-
-    if (error) {
-      throw new ServiceUnavailableException(
-        'Unable to store profile photo securely. Please try again.',
-      );
-    }
-
-    return path;
-  }
-
   private async createSignedPhotoUrl(
     client: SupabaseClient,
     path: string | null,
@@ -388,34 +434,6 @@ export class ApplicationsService {
       .createSignedUrl(path, 60 * 10);
     if (error || !data?.signedUrl) return null;
     return data.signedUrl;
-  }
-
-  private async safeRemovePhoto(client: SupabaseClient, path: string) {
-    try {
-      await client.storage.from(APPLICATION_PHOTO_BUCKET).remove([path]);
-    } catch {
-      // Best-effort cleanup after a failed insert.
-    }
-  }
-
-  private assertTermsAccepted(accepted: boolean) {
-    if (!accepted) {
-      throw new BadRequestException(
-        'You must accept Aahaa Terms & Conditions and Privacy Policy.',
-      );
-    }
-  }
-
-  private assertClosingAfterOpening(open: string, close: string) {
-    const [oh, om] = open.split(':').map(Number);
-    const [ch, cm] = close.split(':').map(Number);
-    const openMinutes = oh * 60 + om;
-    const closeMinutes = ch * 60 + cm;
-    if (closeMinutes <= openMinutes) {
-      throw new BadRequestException(
-        'Kitchen closing time must be later than opening time. Overnight hours are not supported.',
-      );
-    }
   }
 
   private buildApplicationId(prefix: 'CK' | 'DP'): string {

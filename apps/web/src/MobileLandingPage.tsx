@@ -5,6 +5,7 @@ import { FIXED_PICKUP_POINT, isBengaluruPlace, journeyPickName, normalizeJourney
 import { useLocationRecents } from "./lib/useLocationRecents";
 import { useLocationSuggest, type LocationSuggestStatus } from "./lib/useLocationSuggest";
 import { navigate, PATHS } from "./navigation";
+import { getFaqsForSurface } from "./faqContent";
 import imgAahaaBannerSoftTheme from "./assets/mobile-landing/imgAahaaBannerSoftTheme.png";
 import imgImage111 from "./assets/mobile-landing/imgImage111.png";
 import imgImage130 from "./assets/mobile-landing/imgImage130.png";
@@ -45,17 +46,7 @@ function monthCells(year: number, month: number) {
   return [...Array<number | null>(weekday).fill(null), ...Array.from({ length: days }, (_, index) => index + 1)];
 }
 
-const faqs = [
-  {
-    q: "Does Aahaa arrange a stop for my bus?",
-    a: "No. Choose a supported pickup point where your bus already stops, and confirm the stop with your bus operator.",
-  },
-  { q: "What if my bus is delayed?", a: null },
-  { q: "How do I find my delivery partner?", a: null },
-  { q: "Can I change my pickup point?", a: null },
-  { q: "Can I cancel my order or request a refund?", a: null },
-  { q: "How can I track my food delivery order?", a: null },
-];
+const faqs = getFaqsForSurface("landing");
 
 export function MobileLandingPage() {
   const [openFaq, setOpenFaq] = useState(0);
@@ -367,7 +358,7 @@ export function MobileLandingPage() {
         const open = openFaq === index;
         return (
           <button
-            key={faq.q}
+            key={faq.id}
             className={`mlp-abs mlp-faq ${open ? "mlp-faq--open" : "mlp-faq--closed"}`}
             type="button"
             style={{ left: index === 3 || index === 4 ? 17 : 16, top: Y(tops[index]) }}
@@ -375,8 +366,8 @@ export function MobileLandingPage() {
             onClick={() => setOpenFaq(open ? -1 : index)}
           >
             <div style={{ flex: 1 }}>
-              <p className="mlp-faq-q">{faq.q}</p>
-              {open && faq.a ? <p className="mlp-faq-a">{faq.a}</p> : null}
+              <p className="mlp-faq-q">{faq.question}</p>
+              {open && faq.answer ? <p className="mlp-faq-a">{faq.answer}</p> : null}
             </div>
             {open ? <span className="mlp-minus" style={{ position: "absolute", right: 16, top: 16 }} /> : <img src={existing.imgAkarIconsPlus} width={20} height={20} alt="" />}
           </button>

@@ -223,6 +223,7 @@ export type KitchenDish = {
   description: string | null;
   /** null when the kitchen has not supplied a spice level */
   spiceLevel: DishSpiceLevel | null;
+  allergens: string[];
   categoryCode: string | null;
   sortOrder: number;
   isAvailable: boolean;
@@ -331,6 +332,102 @@ export function updateMyProfile(body: {
     auth: true,
     body,
   });
+}
+
+export type NotificationPreferenceCategory =
+  | "order_updates"
+  | "offers_promotions"
+  | "nearby_home_cooks"
+  | "general_updates";
+
+export type NotificationPreferences = Record<
+  NotificationPreferenceCategory,
+  boolean
+> & {
+  updatedAt: string;
+};
+
+export type UpdateNotificationPreferences = Partial<
+  Record<NotificationPreferenceCategory, boolean>
+>;
+
+export function getNotificationPreferences(
+  signal?: AbortSignal,
+): Promise<NotificationPreferences> {
+  return apiRequest<NotificationPreferences>("/notifications/preferences", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function updateNotificationPreferences(
+  body: UpdateNotificationPreferences,
+): Promise<NotificationPreferences> {
+  return apiRequest<NotificationPreferences>("/notifications/preferences", {
+    method: "PATCH",
+    auth: true,
+    body,
+  });
+}
+
+export type CustomerNotification = {
+  id: string;
+  category: NotificationPreferenceCategory;
+  title: string;
+  body: string;
+  iconType: string | null;
+  actionUrl: string | null;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  readAt: string | null;
+  dismissedAt: string | null;
+  createdAt: string;
+};
+
+export function listNotifications(
+  signal?: AbortSignal,
+): Promise<CustomerNotification[]> {
+  return apiRequest<CustomerNotification[]>("/notifications", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function getUnreadNotificationCount(
+  signal?: AbortSignal,
+): Promise<{ unreadCount: number }> {
+  return apiRequest<{ unreadCount: number }>("/notifications/unread-count", {
+    method: "GET",
+    auth: true,
+    signal,
+  });
+}
+
+export function markNotificationRead(
+  notificationId: string,
+): Promise<CustomerNotification> {
+  return apiRequest<CustomerNotification>(
+    `/notifications/${encodeURIComponent(notificationId)}/read`,
+    { method: "PATCH", auth: true },
+  );
+}
+
+export function markAllNotificationsRead(): Promise<{ updatedCount: number }> {
+  return apiRequest<{ updatedCount: number }>("/notifications/read-all", {
+    method: "PATCH",
+    auth: true,
+  });
+}
+
+export function dismissNotification(
+  notificationId: string,
+): Promise<{ dismissed: true; notificationId: string }> {
+  return apiRequest<{ dismissed: true; notificationId: string }>(
+    `/notifications/${encodeURIComponent(notificationId)}/dismiss`,
+    { method: "PATCH", auth: true },
+  );
 }
 
 export type CartItem = {
@@ -588,58 +685,56 @@ export type ApplicationSubmitResult = {
 
 export type ApplicationStatusFilter = "pending" | "approved" | "rejected";
 
-async function apiFormRequest<T>(
-  path: string,
-  formData: FormData,
-  options: { auth?: boolean; signal?: AbortSignal } = {},
-): Promise<T> {
-  const requestHeaders = new Headers();
-  if (options.auth) {
-    const token = getAccessToken();
-    if (token) {
-      requestHeaders.set("Authorization", `Bearer ${token}`);
-    }
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(buildUrl(path), {
-      method: "POST",
-      headers: requestHeaders,
-      body: formData,
-      signal: options.signal,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Network request failed";
-    throw new ApiError(`Unable to reach the API: ${message}`, 0, error);
-  }
-
-  if (!response.ok) {
-    const { message, details } = await parseErrorMessage(response);
-    throw new ApiError(message, response.status, details);
-  }
-
-  return (await response.json()) as T;
-}
+export type SubmitCookApplicationPayload = {
+  fullName: string;
+  mobileNumber: string;
+  email: string;
+  city: string;
+  pincode: string;
+  foodPreference: "vegetarian" | "non_vegetarian" | "both";
+  foodReferences: string[];
+  availableDays: string[];
+  availabilityMode: "shared";
+  availabilityByDay: Record<string, { from: string; until: string }>;
+};
 
 export function submitCookApplication(
-  formData: FormData,
+  payload: SubmitCookApplicationPayload,
   signal?: AbortSignal,
 ): Promise<ApplicationSubmitResult> {
-  return apiFormRequest<ApplicationSubmitResult>("/applications/cook", formData, {
+  return apiRequest<ApplicationSubmitResult>("/applications/cook", {
+    method: "POST",
+    body: payload,
     signal,
   });
 }
 
+export type SubmitDeliveryPartnerApplicationPayload = {
+  fullName: string;
+  mobileNumber: string;
+  email: string;
+  city: string;
+  pincode: string;
+  ownsVehicle: boolean;
+  vehicleType?: "bike" | "car" | "auto" | "other";
+  vehicleRegistrationNumber?: string;
+  otherVehicleDescription?: string;
+  availableDaysMode: "all_days" | "weekdays" | "weekends" | "choose_days";
+  availableDays: string[];
+  workingHoursMode: "full_app" | "custom";
+  availableFrom: string;
+  availableUntil: string;
+};
+
 export function submitDeliveryPartnerApplication(
-  formData: FormData,
+  payload: SubmitDeliveryPartnerApplicationPayload,
   signal?: AbortSignal,
 ): Promise<ApplicationSubmitResult> {
-  return apiFormRequest<ApplicationSubmitResult>(
-    "/applications/delivery-partner",
-    formData,
-    { signal },
-  );
+  return apiRequest<ApplicationSubmitResult>("/applications/delivery-partner", {
+    method: "POST",
+    body: payload,
+    signal,
+  });
 }
 
 export type AdminCookApplicationListItem = {
@@ -649,7 +744,6 @@ export type AdminCookApplicationListItem = {
   full_name: string;
   mobile_number: string;
   email: string;
-  kitchen_name: string;
   city: string;
   food_preference: string;
   created_at: string;
@@ -664,7 +758,7 @@ export type AdminDeliveryPartnerListItem = {
   mobileNumber: string;
   email: string;
   city: string;
-  workPreference: string;
+  workPreference: string | null;
   createdAt: string;
   reviewedAt: string | null;
 };

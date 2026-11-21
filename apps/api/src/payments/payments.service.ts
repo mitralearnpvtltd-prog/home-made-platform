@@ -281,30 +281,26 @@ export class PaymentsService {
       : null;
 
     const client = this.requireAdmin();
-    const recorded = await client.rpc('payment_webhook_event_record', {
-      p_provider: 'cashfree',
-      p_event_id: eventId,
-      p_event_type: eventType,
-      p_order_id: aahaaOrderId,
-      p_cashfree_order_id: cashfreeOrderId,
-      p_payload_hash: payloadHash,
-    });
-
-    if (recorded.error) {
-      this.throwRpcError(recorded.error.message, 'Unable to record webhook event');
-    }
-    if (recorded.data !== true) {
-      return { ok: true, duplicate: true };
-    }
-
     if (!aahaaOrderId || !cashfreeOrderId) {
       this.logger.warn('Cashfree webhook ignored: could not resolve Aahaa order');
-      return { ok: true };
+      return this.recordWebhookEvent(client, {
+        eventId,
+        eventType,
+        orderId: aahaaOrderId,
+        cashfreeOrderId,
+        payloadHash,
+      });
     }
 
     const mapped = this.mapWebhookPaymentStatus(eventType, paymentStatusRaw);
     if (!mapped) {
-      return { ok: true };
+      return this.recordWebhookEvent(client, {
+        eventId,
+        eventType,
+        orderId: aahaaOrderId,
+        cashfreeOrderId,
+        payloadHash,
+      });
     }
 
     const order = await this.loadOrderById(client, aahaaOrderId);
@@ -315,7 +311,13 @@ export class PaymentsService {
       this.logger.warn(
         `Cashfree webhook amount mismatch for order ${aahaaOrderId}; ignored`,
       );
-      return { ok: true };
+      return this.recordWebhookEvent(client, {
+        eventId,
+        eventType,
+        orderId: aahaaOrderId,
+        cashfreeOrderId,
+        payloadHash,
+      });
     }
 
     await this.applyPaymentResult({
@@ -327,7 +329,39 @@ export class PaymentsService {
       expectedCurrency: orderCurrency || order.currency || 'INR',
     });
 
-    return { ok: true };
+    return this.recordWebhookEvent(client, {
+      eventId,
+      eventType,
+      orderId: aahaaOrderId,
+      cashfreeOrderId,
+      payloadHash,
+    });
+  }
+
+  private async recordWebhookEvent(
+    client: SupabaseClient,
+    input: {
+      eventId: string;
+      eventType: string | null;
+      orderId: string | null;
+      cashfreeOrderId: string | null;
+      payloadHash: string;
+    },
+  ): Promise<{ ok: true; duplicate?: boolean }> {
+    const { data, error } = await client.rpc('payment_webhook_event_record', {
+      p_provider: 'cashfree',
+      p_event_id: input.eventId,
+      p_event_type: input.eventType,
+      p_order_id: input.orderId,
+      p_cashfree_order_id: input.cashfreeOrderId,
+      p_payload_hash: input.payloadHash,
+    });
+
+    if (error) {
+      this.throwRpcError(error.message, 'Unable to record webhook event');
+    }
+
+    return data === true ? { ok: true } : { ok: true, duplicate: true };
   }
 
   private async applyPaymentResult(input: {

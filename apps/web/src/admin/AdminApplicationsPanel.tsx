@@ -15,6 +15,85 @@ import "../styles/apply.css";
 
 type Tab = "cook" | "delivery";
 
+function displayValue(value: unknown): string {
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function displayTime(value: unknown): string {
+  if (typeof value !== "string") return "—";
+  const match = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!match) return value;
+  const hour = Number(match[1]);
+  return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+function displayWeekdays(value: unknown): string {
+  if (!Array.isArray(value)) return "—";
+  return value
+    .filter((day): day is string => typeof day === "string")
+    .map((day) => `${day.charAt(0).toUpperCase()}${day.slice(1)}`)
+    .join(", ") || "—";
+}
+
+function displayAvailableDaysMode(value: unknown): string {
+  const labels: Record<string, string> = {
+    all_days: "All Days",
+    weekdays: "Weekdays",
+    weekends: "Weekends",
+    choose_days: "Choose Days",
+  };
+  return typeof value === "string" ? labels[value] ?? "Not recorded" : "Not recorded";
+}
+
+function displayWorkPreference(value: unknown): string {
+  if (value === "full_time") return "Full Time";
+  if (value === "part_time") return "Part Time";
+  return displayValue(value);
+}
+
+function displayVehicleType(value: unknown): string {
+  const labels: Record<string, string> = {
+    bike: "Bike",
+    car: "Car",
+    auto: "Auto",
+    other: "Other",
+  };
+  return typeof value === "string" ? labels[value] ?? value : "Not recorded";
+}
+
+function displayWorkingHoursMode(value: unknown): string {
+  if (value === "full_app") return "Full App Hours (6:00 PM–9:00 PM)";
+  if (value === "custom") return "Custom Timing";
+  return "Not recorded";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function displayDailyAvailability(
+  schedule: unknown,
+  days: unknown,
+  fallbackFrom: unknown,
+  fallbackUntil: unknown,
+): string {
+  if (!Array.isArray(days)) return "—";
+  return days
+    .filter((day): day is string => typeof day === "string")
+    .map((day) => {
+      const daily = isRecord(schedule) && isRecord(schedule[day])
+        ? schedule[day]
+        : undefined;
+      const dayLabel = `${day.charAt(0).toUpperCase()}${day.slice(1)}`;
+      const from = daily?.from ?? fallbackFrom;
+      const until = daily?.until ?? fallbackUntil;
+      return `${dayLabel}: ${displayTime(from)}–${displayTime(until)}`;
+    })
+    .join(" · ") || "—";
+}
+
 export function AdminApplicationsPanel({ initialTab }: { initialTab: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +225,7 @@ export function AdminApplicationsPanel({ initialTab }: { initialTab: Tab }) {
                         <span className={`aa-admin__badge is-${row.status}`}>{row.status}</span>
                       </h3>
                       <p>
-                        {row.application_id} · {row.kitchen_name} · {row.city}
+                        {row.application_id} · {row.city}
                       </p>
                       <p>
                         {row.email} · {row.mobile_number} · Submitted{" "}
@@ -170,7 +249,10 @@ export function AdminApplicationsPanel({ initialTab }: { initialTab: Tab }) {
                         <span className={`aa-admin__badge is-${row.status}`}>{row.status}</span>
                       </h3>
                       <p>
-                        {row.applicationId} · {row.city} · {row.workPreference}
+                        {row.applicationId} · {row.city}
+                        {row.workPreference
+                          ? ` · ${displayWorkPreference(row.workPreference)}`
+                          : ""}
                       </p>
                       <p>
                         {row.email} · {row.mobileNumber}
@@ -207,16 +289,164 @@ export function AdminApplicationsPanel({ initialTab }: { initialTab: Tab }) {
                 </span>
               )}
             </p>
-            <dl>
-              {Object.entries(detail)
-                .filter(([key]) => !["profilePhotoUrl", "id"].includes(key))
-                .map(([key, value]) => (
-                  <div key={key} style={{ display: "contents" }}>
-                    <dt>{key}</dt>
-                    <dd>{Array.isArray(value) ? value.join(", ") : String(value ?? "—")}</dd>
-                  </div>
+            {tab === "cook" ? (
+              <div className="aa-admin__cook-details">
+                <p className="aa-admin__cook-status">
+                  Status <span className={`aa-admin__badge is-${String(detail.status ?? "pending")}`}>{displayValue(detail.status)}</span>
+                </p>
+                {([
+                  {
+                    title: "Personal Details",
+                    fields: [
+                      ["Full Name", detail.fullName],
+                      ["Mobile Number", detail.mobileNumber],
+                      ["Email Address", detail.email],
+                      ["City", detail.city],
+                      ["Pincode", detail.pincode],
+                    ],
+                  },
+                  {
+                    title: "Food Details",
+                    fields: [
+                      ["Food Preference", detail.foodPreference === "non_vegetarian" ? "Non-Vegetarian" : detail.foodPreference === "both" ? "Both Vegetarian and Non-Vegetarian" : detail.foodPreference === "vegetarian" ? "Vegetarian" : detail.foodPreference],
+                      ["Selected Food References", detail.foodReferences],
+                    ],
+                  },
+                  {
+                    title: "Kitchen Availability",
+                    fields: [
+                      ["Available Days", displayWeekdays(detail.availableDays)],
+                      [
+                        "Daily Timings",
+                        displayDailyAvailability(
+                          detail.availabilityByDay,
+                          detail.availableDays,
+                          detail.availableFrom ?? detail.kitchenOpeningTime,
+                          detail.availableUntil ?? detail.kitchenClosingTime,
+                        ),
+                      ],
+                    ],
+                  },
+                ]).map((group) => (
+                  <section key={group.title}>
+                    <h3>{group.title}</h3>
+                    <dl>
+                      {group.fields.map(([label, value]) => (
+                        <div key={String(label)}>
+                          <dt>{String(label)}</dt>
+                          <dd>{displayValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
                 ))}
-            </dl>
+              </div>
+            ) : (
+              <div className="aa-admin__cook-details">
+                <p className="aa-admin__cook-status">
+                  Status <span className={`aa-admin__badge is-${String(detail.status ?? "pending")}`}>{displayValue(detail.status)}</span>
+                </p>
+                {([
+                  {
+                    title: "Personal Details",
+                    fields: [
+                      ["Full Name", detail.fullName],
+                      ["Mobile Number", detail.mobileNumber],
+                      ["Email Address", detail.email],
+                      ["City", detail.city],
+                      ["Pincode", detail.pincode],
+                    ],
+                  },
+                  {
+                    title: "Work Details",
+                    fields: [
+                      [
+                        "Do you own a vehicle?",
+                        detail.ownsVehicle === true
+                          ? "Yes"
+                          : detail.ownsVehicle === false
+                            ? "No"
+                            : "Not recorded",
+                      ],
+                      [
+                        "Which vehicle do you own?",
+                        detail.ownsVehicle === true
+                          ? displayVehicleType(detail.vehicleType)
+                          : detail.ownsVehicle === false
+                            ? "Not applicable"
+                            : "Not recorded",
+                      ],
+                      [
+                        "Vehicle Registration Number",
+                        detail.ownsVehicle === false || detail.vehicleType === "other"
+                          ? "Not applicable"
+                          : detail.vehicleRegistrationNumber,
+                      ],
+                      [
+                        "Specify Your Vehicle Type",
+                        detail.vehicleType === "other"
+                          ? detail.otherVehicleDescription
+                          : detail.ownsVehicle === false
+                            ? "Not applicable"
+                            : "Not recorded",
+                      ],
+                      ...(detail.ownsVehicle === false &&
+                      typeof detail.canArrangeVehicle === "boolean"
+                        ? [[
+                            "Will you arrange your own vehicle for Aahaa deliveries?",
+                            detail.canArrangeVehicle ? "Yes" : "No",
+                          ]]
+                        : []),
+                      ...(detail.workPreference !== null &&
+                      detail.workPreference !== undefined &&
+                      detail.workPreference !== ""
+                        ? [["Work Preference", displayWorkPreference(detail.workPreference)]]
+                        : []),
+                      ["Working Days Option", displayAvailableDaysMode(detail.availableDaysMode)],
+                      ["Available Working Days", displayWeekdays(detail.availableDays)],
+                      ["Working Hours Option", displayWorkingHoursMode(detail.workingHoursMode)],
+                      ["Available From", displayTime(detail.availableFrom)],
+                      ["Available Until", displayTime(detail.availableUntil)],
+                    ],
+                  },
+                ]).map((group) => (
+                  <section key={group.title}>
+                    <h3>{group.title}</h3>
+                    <dl>
+                      {group.fields.map(([label, value]) => (
+                        <div key={String(label)}>
+                          <dt>{String(label)}</dt>
+                          <dd>{displayValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                ))}
+                {[
+                  detail.currentAddress,
+                  detail.drivingLicenseNumber,
+                  detail.preferredDeliveryArea,
+                ].some((value) => typeof value === "string" && value.trim()) ? (
+                  <section>
+                    <h3>Details from Previous Application</h3>
+                    <dl>
+                      {[
+                        ["Current Address", detail.currentAddress],
+                        ["Driving License Number", detail.drivingLicenseNumber],
+                        ["Preferred Delivery Area", detail.preferredDeliveryArea],
+                      ]
+                        .filter(([, value]) => typeof value === "string" && value.trim())
+                        .map(([label, value]) => (
+                          <div key={String(label)}>
+                            <dt>{String(label)}</dt>
+                            <dd>{displayValue(value)}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                  </section>
+                ) : null}
+              </div>
+            )}
             {detail.status === "pending" ? (
               <div style={{ marginTop: "1.25rem" }}>
                 <label className="aa-apply__field">

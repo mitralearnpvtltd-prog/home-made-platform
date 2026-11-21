@@ -76,6 +76,7 @@ describe('DishesService', () => {
           spice_level: 'Mild',
           sort_order: 2,
           is_available: true,
+          allergens: [{ label: 'Mustard' }, { label: 'Peanuts' }],
           category: { code: 'meals' },
         },
         {
@@ -88,6 +89,7 @@ describe('DishesService', () => {
           spice_level: null,
           sort_order: 1,
           is_available: true,
+          allergens: [],
           category: { code: 'meals' },
         },
       ],
@@ -104,13 +106,22 @@ describe('DishesService', () => {
     expect(from).toHaveBeenCalledWith('dishes');
     expect(dishesChain.eq).toHaveBeenCalledWith('kitchen_id', kitchenId);
     expect(dishesChain.eq).toHaveBeenCalledWith('is_available', true);
+    expect(dishesChain.select).toHaveBeenCalledWith(
+      expect.stringContaining('allergens:dish_allergens'),
+    );
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({
       code: 'lemon-rice',
       spiceLevel: 'Mild',
+      allergens: ['Mustard', 'Peanuts'],
       categoryCode: 'meals',
       isAvailable: true,
       price: 100,
+    });
+    expect(rows[1]).toMatchObject({
+      code: 'veg-lunch',
+      spiceLevel: null,
+      allergens: [],
     });
   });
 

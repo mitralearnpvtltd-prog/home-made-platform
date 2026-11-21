@@ -14,6 +14,7 @@ import { DishesModule } from './dishes/dishes.module';
 import { HealthModule } from './health/health.module';
 import { KitchensModule } from './kitchens/kitchens.module';
 import { LocationsModule } from './locations/locations.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SmsModule } from './sms/sms.module';
@@ -40,6 +41,7 @@ loadApiEnvFile({ override: true });
     AuthModule,
     SmsModule,
     CartModule,
+    NotificationsModule,
     OrdersModule,
     PaymentsModule,
     ApplicationsModule,

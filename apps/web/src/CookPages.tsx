@@ -48,16 +48,26 @@ import {
   getCart,
   getKitchenDish,
   getMyProfile,
+  getNotificationPreferences,
+  getUnreadNotificationCount,
   deleteOrder,
+  dismissNotification,
   getOrder,
+  listNotifications,
   listKitchens,
   listOrders,
+  markAllNotificationsRead,
+  markNotificationRead,
   removeCartItem,
   updateCartItem,
   updateMyProfile,
+  updateNotificationPreferences,
   verifyCashfreePayment,
   type AuthProfile,
+  type CustomerNotification,
   type KitchenListItem,
+  type NotificationPreferenceCategory,
+  type NotificationPreferences,
   type Order,
   type OrderListItem,
   type OrderStatus,
@@ -78,6 +88,16 @@ import {
   paymentStatusSummary,
 } from "./lib/paymentStatus";
 import { readJourneySelection, writeJourneySelection } from "./lib/journeySession";
+import {
+  FAQ_CATEGORIES,
+  getFaqsForSurface,
+  type FaqCategory,
+  type FaqEntry,
+} from "./faqContent";
+import {
+  SUPPORT_CHAT_QUESTIONS,
+  UNSUPPORTED_SUPPORT_CHAT_ANSWER,
+} from "./supportChatContent";
 import { clearAuthSession, getAccessToken, readCachedProfile, cacheProfile } from "./lib/authSession";
 import { cartToBagLines } from "./lib/cartMapping";
 import {
@@ -345,6 +365,16 @@ export function CookPages({ path }: { path: string }) {
 
     const mobileCheckout = window.matchMedia("(max-width: 767px)").matches;
     const cachedProfile = readCachedProfile();
+    if (mobileCheckout && path === PATHS.cart && bag.length > 0) {
+      if (!orderingFor) {
+        setPlaceOrderError("Please choose who will collect your order.");
+        return;
+      }
+      if (!pickupName.trim() || !pickupPhone.trim()) {
+        setPlaceOrderError("Please enter the collector’s name and mobile number.");
+        return;
+      }
+    }
     const collectorName =
       pickupName.trim()
       || (mobileCheckout ? (cachedProfile?.fullName?.trim() ?? "") : "");
@@ -775,6 +805,16 @@ export function CookPages({ path }: { path: string }) {
           stop={stop}
           setQty={setQty}
           bagThumbPulse={bagThumbPulse}
+          orderingFor={orderingFor}
+          setOrderingFor={setOrderingFor}
+          pickupName={pickupName}
+          setPickupName={setPickupName}
+          pickupPhone={pickupPhone}
+          setPickupPhone={setPickupPhone}
+          someoneElseName={someoneElseName}
+          setSomeoneElseName={setSomeoneElseName}
+          someoneElsePhone={someoneElsePhone}
+          setSomeoneElsePhone={setSomeoneElsePhone}
           placingOrder={placingOrder}
           placeOrderError={placeOrderError}
           onBack={() => navigate(PATHS.cooks)}
@@ -811,7 +851,6 @@ export function CookPages({ path }: { path: string }) {
           onClose={() => setBagErrorToast(null)}
         />
       ) : null}
-      {notificationsPage || settingsPage ? <MobileStatusBar /> : null}
       <CookHeader
         bagCount={onMenu || mealBagPage || reviewOrderPage || confirmPickupPage || paymentMethodPage || paymentReturnPage || paymentStatusPage || invoicePage || orderSummaryPage || trackOrderPage || myOrdersPage ? bagCount : 0}
         hideCart={accountPage && !myOrdersPage}
@@ -862,7 +901,7 @@ export function CookPages({ path }: { path: string }) {
           ) : helpSupportPage ? (
             <HelpSupportPage />
           ) : faqsPage ? (
-            <MobileFaqsPage />
+            <FaqsPage />
           ) : chatSupportPage ? (
             <MobileChatSupportPage />
           ) : emailSupportPage ? (
@@ -3175,19 +3214,6 @@ function MobilePaymentView({
   );
 }
 
-function MobileStatusBar() {
-  return (
-    <div className="ck-mobile-status-bar" aria-hidden="true">
-      <span>9:41</span>
-      <span className="ck-mobile-status-icons">
-        <svg viewBox="0 0 18 12"><path d="M1 11V8.5h2V11zm4 0V6h2v5zm4 0V3.5h2V11zm4 0V1h2v10z" /></svg>
-        <svg viewBox="0 0 16 12"><path d="M1 4.5a10 10 0 0 1 14 0L8 11z" /></svg>
-        <svg viewBox="0 0 25 13"><rect x=".5" y="1" width="21" height="11" rx="2" /><path d="M23 4v5" /><rect x="2.5" y="3" width="16" height="7" rx="1" /></svg>
-      </span>
-    </div>
-  );
-}
-
 function MobilePaymentStatusPage({
   order,
   bag,
@@ -4649,7 +4675,6 @@ function mealDetailCopy(meal: Meal) {
       mobileLead: "Home made lemon rice with peanuts and mild spices",
       about: LEMON_RICE_ABOUT,
       ingredients: LEMON_RICE_INGREDIENTS,
-      allergen: "Contains peanuts and mustard",
       servingPrimary: "1 serving",
       servingHint: "Perfect for one",
       portionLabel: "1 Serving",
@@ -4687,7 +4712,6 @@ function mealDetailCopy(meal: Meal) {
       ? `${meal.description}. Packed as a ${meal.pack.toLowerCase()} — freshly made and ready for your journey.`
       : `${meal.description}. Freshly made in a home kitchen and packed carefully for pickup on your journey.`,
     ingredients: meal.description,
-    allergen: "Ask the kitchen if you have food allergies",
     servingPrimary,
     servingHint,
     portionLabel: meal.pack ?? "1 Serving",
@@ -4735,12 +4759,37 @@ function FoodDetail({
   const qty = meal ? bag.find((line) => line.meal.id === meal.id)?.qty ?? 0 : 0;
   const displayQty = qty > 0 ? qty : 1;
   const [activeThumb, setActiveThumb] = useState(0);
-  /** undefined = loading; null = unknown / unavailable from API */
-  const [spiceLevel, setSpiceLevel] = useState<string | null | undefined>(undefined);
+  const [dishFacts, setDishFacts] = useState<{
+    kitchenId: string;
+    dishCode: string;
+    status: "loading" | "loaded" | "error";
+    spiceLevel: string | null;
+    allergens: string[];
+  } | null>(null);
   const gallery = meal ? foodDetailGallery(meal) : [];
   const copy = meal ? mealDetailCopy(meal) : null;
   const includes = meal ? mealIncludeItems(meal) : [];
   const heroSrc = gallery[Math.min(activeThumb, Math.max(gallery.length - 1, 0))] ?? meal?.photo ?? "";
+  const currentFacts =
+    meal &&
+    dishFacts?.kitchenId === kitchen.id &&
+    dishFacts.dishCode === meal.id
+      ? dishFacts
+      : null;
+  const allergenText =
+    currentFacts?.status === "loaded"
+      ? currentFacts.allergens.length > 0
+        ? currentFacts.allergens.join(", ")
+        : "Allergen information not provided by the kitchen."
+      : currentFacts?.status === "error"
+        ? "Unable to load allergen information."
+        : "Loading allergen information…";
+  const spiceText =
+    currentFacts?.status === "loaded"
+      ? currentFacts.spiceLevel ?? "Not specified"
+      : currentFacts?.status === "error"
+        ? "Unable to load"
+        : "Loading…";
 
   useEffect(() => {
     setActiveThumb(0);
@@ -4753,15 +4802,33 @@ function FoodDetail({
   useEffect(() => {
     if (!meal) return;
     const controller = new AbortController();
-    setSpiceLevel(undefined);
+    setDishFacts({
+      kitchenId: kitchen.id,
+      dishCode: meal.id,
+      status: "loading",
+      spiceLevel: null,
+      allergens: [],
+    });
     void getKitchenDish(kitchen.id, meal.id, controller.signal)
       .then((dish) => {
         if (controller.signal.aborted) return;
-        setSpiceLevel(dish.spiceLevel);
+        setDishFacts({
+          kitchenId: kitchen.id,
+          dishCode: meal.id,
+          status: "loaded",
+          spiceLevel: dish.spiceLevel,
+          allergens: dish.allergens,
+        });
       })
       .catch(() => {
         if (controller.signal.aborted) return;
-        setSpiceLevel(null);
+        setDishFacts({
+          kitchenId: kitchen.id,
+          dishCode: meal.id,
+          status: "error",
+          spiceLevel: null,
+          allergens: [],
+        });
       });
     return () => controller.abort();
   }, [kitchen.id, meal?.id]);
@@ -4846,29 +4913,27 @@ function FoodDetail({
               </p>
               <div className="ck-meal-allergen-block">
                 <strong>Allergen information</strong>
-                <p className="ck-meal-allergen">
+                <p className="ck-meal-allergen" aria-live="polite">
                   <AlertIcon />
-                  {copy.allergen}
+                  {allergenText}
                 </p>
               </div>
             </div>
-            {spiceLevel !== undefined ? (
-              <p className="ck-meal-spice">
-                <span className="ck-meal-spice-label">Spice level</span>
-                <em className="ck-meal-spice-badge">
-                  {spiceLevel ? (
-                    <>
-                      <span className="ck-meal-chili" aria-hidden="true">
-                        🌶️
-                      </span>
-                      {spiceLevel}
-                    </>
-                  ) : (
-                    "Not specified"
-                  )}
-                </em>
-              </p>
-            ) : null}
+            <p className="ck-meal-spice" aria-live="polite">
+              <span className="ck-meal-spice-label">Spice level</span>
+              <em className="ck-meal-spice-badge">
+                {currentFacts?.status === "loaded" && currentFacts.spiceLevel ? (
+                  <>
+                    <span className="ck-meal-chili" aria-hidden="true">
+                      🌶️
+                    </span>
+                    {spiceText}
+                  </>
+                ) : (
+                  spiceText
+                )}
+              </em>
+            </p>
           </div>
 
           <div className="ck-meal-cta">
@@ -4982,6 +5047,30 @@ function FoodDetail({
           <h2>About this item</h2>
           <p>{copy.about}</p>
         </section>
+        <div className="ck-meal-facts ck-m-meal-facts">
+          <div className="ck-meal-allergen-block">
+            <strong>Allergen information</strong>
+            <p className="ck-meal-allergen" aria-live="polite">
+              <AlertIcon />
+              {allergenText}
+            </p>
+          </div>
+          <p className="ck-meal-spice" aria-live="polite">
+            <span className="ck-meal-spice-label">Spice level</span>
+            <em className="ck-meal-spice-badge">
+              {currentFacts?.status === "loaded" && currentFacts.spiceLevel ? (
+                <>
+                  <span className="ck-meal-chili" aria-hidden="true">
+                    🌶️
+                  </span>
+                  {spiceText}
+                </>
+              ) : (
+                spiceText
+              )}
+            </em>
+          </p>
+        </div>
         <div className="ck-m-meal-meta">
           <div>
             <img className="ck-m-meal-meta-ico" src={metaChefHat} alt="" />
@@ -6338,49 +6427,378 @@ function MyOrdersPage() {
   );
 }
 
-type AccountNotification = {
-  title: string;
-  description: string;
-  time: string;
-  icon: "meal" | "gift" | "order" | "cook" | "bell" | "offer" | "info";
-  read: boolean;
+const NOTIFICATION_CATEGORY_LABELS: Record<NotificationPreferenceCategory, string> = {
+  order_updates: "Order updates",
+  offers_promotions: "Offers and promotions",
+  nearby_home_cooks: "Nearby home cooks",
+  general_updates: "General updates",
 };
 
-const INITIAL_NOTIFICATIONS: AccountNotification[] = [
-  { title: "Your order has been delivered", description: "Your order from Swathi’s Kitchen has been delivered successfully.", time: "10 min ago", icon: "meal", read: false },
-  { title: "Special offer for you!", description: "Get 10% off on your next order from Meena’s Home Food.", time: "2 hours ago", icon: "gift", read: false },
-  { title: "Your order is out for delivery", description: "Your order from Padma’s Kitchen is on the way.", time: "4 hours ago", icon: "order", read: false },
-  { title: "New home cook near your route", description: "Agalya’s Kitchen is now available at Hosur bus stop.", time: "1 day ago", icon: "cook", read: false },
-  { title: "Order confirmed", description: "Your order from Meena’s Home Food has been confirmed.", time: "2 days ago", icon: "bell", read: false },
-  { title: "Weekend special!", description: "Enjoy homemade meals with exclusive offers this weekend.", time: "3 days ago", icon: "offer", read: false },
-  { title: "Welcome to aahaa!", description: "Thank you for joining aahaa. Start exploring homemade meals now!", time: "5 days ago", icon: "info", read: false },
-];
-
-function NotificationArt({ type }: { type: AccountNotification["icon"] }) {
-  const icon = {
-    meal: null,
+function NotificationArt({
+  category,
+  iconType,
+}: {
+  category: NotificationPreferenceCategory;
+  iconType: string | null;
+}) {
+  const icons: Record<string, ReactNode> = {
+    meal: <MenuIcon />,
     gift: <GiftIcon />,
     order: <MenuIcon />,
     cook: <StepCookIcon />,
     bell: <NotificationIcon />,
     offer: <span className="ck-notification-percent">%</span>,
     info: <InfoIcon />,
-  }[type];
+  };
+  const categoryIcons: Record<NotificationPreferenceCategory, ReactNode> = {
+    order_updates: <NotificationIcon />,
+    offers_promotions: <GiftIcon />,
+    nearby_home_cooks: <StepCookIcon />,
+    general_updates: <InfoIcon />,
+  };
+
   return (
     <span className="ck-notification-art">
-      {type === "meal" ? <img src={orderMealPhoto("veg-lunch", SWATHI_KITCHEN_ID)} alt="" /> : icon}
+      {iconType ? icons[iconType.toLowerCase()] ?? categoryIcons[category] : categoryIcons[category]}
     </span>
   );
 }
 
-function NotificationsPage() {
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
-  const [openMenu, setOpenMenu] = useState<number | null>(null);
+function formatNotificationDate(createdAt: string): string {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return createdAt;
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
-  function updateNotification(index: number, update: (notification: AccountNotification) => AccountNotification) {
-    setNotifications((current) => current.map((notification, itemIndex) => itemIndex === index ? update(notification) : notification));
-    setOpenMenu(null);
+function notificationActionLink(actionUrl: string | null): {
+  href: string;
+  external: boolean;
+} | null {
+  if (!actionUrl?.trim()) return null;
+
+  try {
+    const url = new URL(actionUrl, window.location.origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    const external = url.origin !== window.location.origin;
+    return {
+      href: external ? url.href : `${url.pathname}${url.search}${url.hash}`,
+      external,
+    };
+  } catch {
+    return null;
   }
+}
+
+function redirectForNotificationAuthFailure(error: unknown): boolean {
+  if (
+    !(error instanceof ApiError) ||
+    (error.status !== 401 && error.status !== 403)
+  ) {
+    return false;
+  }
+
+  clearAuthSession();
+  navigate(PATHS.login);
+  return true;
+}
+
+function NotificationFeed({
+  notifications,
+  loading,
+  error,
+  onRetry,
+  openMenu,
+  pendingAction,
+  onToggleMenu,
+  onMarkRead,
+  onDismiss,
+}: NotificationFeedProps) {
+  if (loading) {
+    return <p className="ck-notifications-state" role="status">Loading your notifications…</p>;
+  }
+  if (error) {
+    return (
+      <div className="ck-notifications-state is-error" role="alert">
+        <p>{error}</p>
+        <button type="button" onClick={onRetry}>Try again</button>
+      </div>
+    );
+  }
+  if (notifications.length === 0) {
+    return (
+      <p className="ck-notifications-state ck-notifications-empty">
+        You’re all caught up. New notifications will appear here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="ck-notifications-list">
+      {notifications.map((notification) => {
+        const actionLink = notificationActionLink(notification.actionUrl);
+        const menuIsOpen = openMenu === notification.id;
+
+        return (
+          <article
+            className={`ck-notification-card ck-notification-card--responsive${notification.isRead ? " is-read" : ""}`}
+            key={notification.id}
+          >
+            {!notification.isRead
+              ? <span className="ck-notification-unread" aria-label="Unread" />
+              : <span className="ck-notification-unread-placeholder" />}
+            <NotificationArt
+              category={notification.category}
+              iconType={notification.iconType}
+            />
+            <div className="ck-notification-copy">
+              <span className={`ck-notification-category is-${notification.category}`}>
+                {NOTIFICATION_CATEGORY_LABELS[notification.category]}
+              </span>
+              <strong>{notification.title}</strong>
+              <p>{notification.body}</p>
+              {actionLink ? (
+                actionLink.external ? (
+                  <a
+                    className="ck-notification-link"
+                    href={actionLink.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View details
+                  </a>
+                ) : (
+                  <button
+                    className="ck-notification-link"
+                    type="button"
+                    onClick={() => navigate(actionLink.href)}
+                  >
+                    View details
+                  </button>
+                )
+              ) : null}
+              <time
+                className="ck-notification-time-mobile"
+                dateTime={notification.createdAt}
+              >
+                {formatNotificationDate(notification.createdAt)}
+              </time>
+            </div>
+            <time
+              className="ck-notification-time-desktop"
+              dateTime={notification.createdAt}
+            >
+              {formatNotificationDate(notification.createdAt)}
+            </time>
+            <div className="ck-notification-actions">
+              <button
+                type="button"
+                aria-label={`Options for ${notification.title}`}
+                aria-expanded={menuIsOpen}
+                disabled={Boolean(pendingAction)}
+                onClick={() => onToggleMenu(notification.id)}
+              >
+                <span aria-hidden="true">⋮</span>
+              </button>
+              {menuIsOpen ? (
+                <div className="ck-notification-menu">
+                  {!notification.isRead ? (
+                    <button
+                      type="button"
+                      disabled={Boolean(pendingAction)}
+                      onClick={() => onMarkRead(notification.id)}
+                    >
+                      Mark as read
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={Boolean(pendingAction)}
+                    onClick={() => onDismiss(notification.id)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function NotificationsPage() {
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [reloadId, setReloadId] = useState(0);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const actionLock = useRef(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError("");
+    setActionError("");
+
+    void Promise.all([
+      listNotifications(controller.signal),
+      getUnreadNotificationCount(controller.signal),
+    ])
+      .then(([rows, unread]) => {
+        if (controller.signal.aborted) return;
+        setNotifications(rows);
+        setUnreadCount(unread.unreadCount);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setNotifications([]);
+        setUnreadCount(0);
+        if (redirectForNotificationAuthFailure(error)) {
+          setLoadError("Your session expired. Please sign in again.");
+          return;
+        }
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load your notifications. Please try again.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [reloadId]);
+
+  function retryLoading() {
+    setLoading(true);
+    setReloadId((current) => current + 1);
+  }
+
+  async function refreshUnreadCount(fallbackCount: number) {
+    try {
+      const result = await getUnreadNotificationCount();
+      setUnreadCount(result.unreadCount);
+    } catch (error) {
+      if (redirectForNotificationAuthFailure(error)) return;
+      setUnreadCount(fallbackCount);
+      setActionError(
+        "Your change was saved, but the unread count could not be refreshed. Refresh the inbox to sync it.",
+      );
+    }
+  }
+
+  async function markRead(notificationId: string) {
+    if (actionLock.current) return;
+    const current = notifications.find((item) => item.id === notificationId);
+    if (!current || current.isRead) return;
+
+    actionLock.current = true;
+    setPendingAction(notificationId);
+    setActionError("");
+    try {
+      const updated = await markNotificationRead(notificationId);
+      setNotifications((items) =>
+        items.map((item) => item.id === notificationId ? updated : item),
+      );
+      setOpenMenu(null);
+      await refreshUnreadCount(Math.max(0, unreadCount - 1));
+    } catch (error) {
+      if (redirectForNotificationAuthFailure(error)) return;
+      setActionError(
+        `Could not mark this notification as read. Refresh the inbox to check its latest state. ${error instanceof Error ? error.message : ""}`,
+      );
+    } finally {
+      actionLock.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  async function markAllRead() {
+    if (actionLock.current || unreadCount === 0) return;
+
+    actionLock.current = true;
+    setPendingAction("all");
+    setActionError("");
+    try {
+      const result = await markAllNotificationsRead();
+      setNotifications((items) =>
+        items.map((item) => item.isRead ? item : { ...item, isRead: true }),
+      );
+      setOpenMenu(null);
+      await refreshUnreadCount(Math.max(0, unreadCount - result.updatedCount));
+    } catch (error) {
+      if (redirectForNotificationAuthFailure(error)) return;
+      setActionError(
+        `Could not mark notifications as read. Refresh the inbox to check its latest state. ${error instanceof Error ? error.message : ""}`,
+      );
+    } finally {
+      actionLock.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  async function dismiss(notificationId: string) {
+    if (actionLock.current) return;
+    const current = notifications.find((item) => item.id === notificationId);
+    if (!current) return;
+
+    actionLock.current = true;
+    setPendingAction(notificationId);
+    setActionError("");
+    try {
+      await dismissNotification(notificationId);
+      setNotifications((items) =>
+        items.filter((item) => item.id !== notificationId),
+      );
+      setOpenMenu(null);
+      await refreshUnreadCount(
+        Math.max(0, unreadCount - (current.isRead ? 0 : 1)),
+      );
+    } catch (error) {
+      if (redirectForNotificationAuthFailure(error)) return;
+      setActionError(
+        `Could not dismiss this notification. Refresh the inbox to check its latest state. ${error instanceof Error ? error.message : ""}`,
+      );
+    } finally {
+      actionLock.current = false;
+      setPendingAction(null);
+    }
+  }
+
+  function toggleMenu(notificationId: string) {
+    if (pendingAction) return;
+    setOpenMenu((current) => current === notificationId ? null : notificationId);
+  }
+
+  const actionFeedback = actionError ? (
+    <div className="ck-notifications-action-error" role="alert">
+      <span>{actionError}</span>
+      <button type="button" onClick={retryLoading}>Refresh inbox</button>
+    </div>
+  ) : null;
+
+  const feedProps = {
+    notifications,
+    loading,
+    error: loadError,
+    onRetry: retryLoading,
+    openMenu,
+    pendingAction,
+    onToggleMenu: toggleMenu,
+    onMarkRead: (notificationId: string) => void markRead(notificationId),
+    onDismiss: (notificationId: string) => void dismiss(notificationId),
+  };
 
   return (
     <main className="ck-main ck-profile-main ck-notifications-main">
@@ -6390,101 +6808,60 @@ function NotificationsPage() {
           <div className="ck-profile-heading">
             <h1>Notifications</h1>
             <p>Stay updated with your orders, offers and important updates.</p>
+            <span className="ck-notifications-unread-count" aria-live="polite">
+              {unreadCount} unread
+            </span>
           </div>
           <button
             className="ck-notifications-read-all"
             type="button"
-            onClick={() => setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))}
+            disabled={loading || unreadCount === 0 || Boolean(pendingAction)}
+            onClick={() => void markAllRead()}
           >
-            Mark all as read
+            {pendingAction === "all" ? "Marking as read…" : "Mark all as read"}
           </button>
         </header>
-        <div className="ck-notifications-list">
-          {notifications.map((notification, index) => (
-            <article className={`ck-notification-card${notification.read ? " is-read" : ""}`} key={notification.title}>
-              {!notification.read ? <span className="ck-notification-unread" aria-label="Unread" /> : <span className="ck-notification-unread-placeholder" />}
-              <NotificationArt type={notification.icon} />
-              <div className="ck-notification-copy">
-                <strong>{notification.title}</strong>
-                <p>{notification.description}</p>
-              </div>
-              <time>{notification.time}</time>
-              <div className="ck-notification-actions">
-                <button
-                  type="button"
-                  aria-label={`Options for ${notification.title}`}
-                  aria-expanded={openMenu === index}
-                  onClick={() => setOpenMenu((current) => current === index ? null : index)}
-                >
-                  <span aria-hidden="true">⋮</span>
-                </button>
-                {openMenu === index ? (
-                  <div className="ck-notification-menu">
-                    <button type="button" onClick={() => updateNotification(index, (item) => ({ ...item, read: true }))}>Mark as read</button>
-                    <button type="button" onClick={() => { setNotifications((current) => current.filter((_, itemIndex) => itemIndex !== index)); setOpenMenu(null); }}>Remove</button>
-                  </div>
-                ) : null}
-              </div>
-            </article>
-          ))}
-          {notifications.length === 0 ? <p className="ck-settings-empty">You’re all caught up.</p> : null}
-        </div>
+        {actionFeedback}
+        <NotificationFeed
+          {...feedProps}
+        />
       </section>
-      <MobileNotificationPreferences />
+      <MobileNotificationsInbox
+        unreadCount={unreadCount}
+        pendingAction={pendingAction}
+        actionFeedback={actionFeedback}
+        feedProps={feedProps}
+        onMarkAllRead={() => void markAllRead()}
+      />
     </main>
   );
 }
 
-const MOBILE_NOTIFICATION_GROUPS = [
-  {
-    title: "Order updates",
-    options: [
-      { id: "order-status", title: "Order status updates", description: "Get notified about order confirmation, preparation, and delivery", icon: "bell", enabled: true },
-      { id: "kitchen", title: "Kitchen updates", description: "Get notified about menu updates, availability and special items", icon: "chef", enabled: true },
-      { id: "offers", title: "Offers and discounts", description: "Get notified about exclusive offers and deals", icon: "tag", enabled: true },
-    ],
-  },
-  {
-    title: "Recommendations",
-    options: [
-      { id: "recommended-kitchens", title: "Recommended kitchens", description: "Get suggestions based on your taste and location", icon: "star", enabled: true },
-      { id: "food-menu", title: "Food and menu updates", description: "Get notified about new kitchens and new menu items", icon: "menu", enabled: false },
-    ],
-  },
-  {
-    title: "Account and security",
-    options: [
-      { id: "account-alerts", title: "Account alerts", description: "Get notified about important account and security updates", icon: "shield", enabled: true },
-      { id: "app-updates", title: "App updates", description: "Get notified about new features and improvements", icon: "megaphone", enabled: false },
-    ],
-  },
-] as const;
+type NotificationFeedProps = {
+  notifications: CustomerNotification[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+  openMenu: string | null;
+  pendingAction: string | null;
+  onToggleMenu: (notificationId: string) => void;
+  onMarkRead: (notificationId: string) => void;
+  onDismiss: (notificationId: string) => void;
+};
 
-type MobileNotificationOption = (typeof MOBILE_NOTIFICATION_GROUPS)[number]["options"][number];
-
-function MobileNotificationIcon({ type }: { type: MobileNotificationOption["icon"] }) {
-  const paths = {
-    bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /><path d="M12 3V2" /></>,
-    chef: <><path d="M6 19h12v-8a4 4 0 0 0-1.6-3.2A4.5 4.5 0 0 0 8 6.5 3.5 3.5 0 0 0 6 13v6Z" /><path d="M6 15h12M9 19v2m6-2v2" /></>,
-    tag: <><path d="m3 12 9 9 9-9-9-9H3v9Z" /><circle cx="7.5" cy="7.5" r="1" /></>,
-    star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
-    menu: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 8h8m-8 4h8m-8 4h5" /></>,
-    shield: <><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" /><path d="m9 12 2 2 4-4" /></>,
-    megaphone: <><path d="m3 11 18-5v12L3 13v-2Z" /><path d="M11 15.2 13 21H8l-1.5-6.8M21 10v4" /></>,
-  } satisfies Record<MobileNotificationOption["icon"], ReactNode>;
-
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths[type]}
-    </svg>
-  );
-}
-
-function MobileNotificationPreferences() {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => (
-    Object.fromEntries(MOBILE_NOTIFICATION_GROUPS.flatMap((group) => group.options.map((option) => [option.id, option.enabled])))
-  ));
-
+function MobileNotificationsInbox({
+  unreadCount,
+  pendingAction,
+  actionFeedback,
+  feedProps,
+  onMarkAllRead,
+}: {
+  unreadCount: number;
+  pendingAction: string | null;
+  actionFeedback: ReactNode;
+  feedProps: NotificationFeedProps;
+  onMarkAllRead: () => void;
+}) {
   return (
     <section className="ck-mobile-notifications">
       <header className="ck-mobile-notifications-header">
@@ -6497,53 +6874,194 @@ function MobileNotificationPreferences() {
       </header>
       <div className="ck-mobile-notifications-title">
         <h1>Notifications</h1>
-        <p>Manage your notifications and stay updated</p>
+        <p>{unreadCount} unread notifications</p>
       </div>
-      {MOBILE_NOTIFICATION_GROUPS.map((group) => (
-        <section className="ck-mobile-notification-group" key={group.title}>
-          <h2>{group.title}</h2>
-          <div className="ck-mobile-notification-card">
-            {group.options.map((option) => (
-              <div className="ck-mobile-notification-option" key={option.id}>
-                <span className="ck-mobile-notification-icon"><MobileNotificationIcon type={option.icon} /></span>
-                <span className="ck-mobile-notification-copy">
-                  <strong>{option.title}</strong>
-                  <small>{option.description}</small>
-                </span>
-                <button
-                  className={`ck-settings-switch${enabled[option.id] ? " is-on" : ""}`}
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled[option.id]}
-                  aria-label={option.title}
-                  onClick={() => setEnabled((current) => ({ ...current, [option.id]: !current[option.id] }))}
-                >
-                  <span />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+      <div className="ck-mobile-notifications-toolbar">
+        <button
+          className="ck-notifications-read-all"
+          type="button"
+          disabled={feedProps.loading || unreadCount === 0 || Boolean(pendingAction)}
+          onClick={onMarkAllRead}
+        >
+          {pendingAction === "all" ? "Marking as read…" : "Mark all as read"}
+        </button>
+        <button
+          className="ck-mobile-notification-settings"
+          type="button"
+          onClick={() => navigate(PATHS.appSettings)}
+        >
+          Notification settings
+        </button>
+      </div>
+      {actionFeedback}
+      <NotificationFeed {...feedProps} />
     </section>
   );
 }
 
 const SETTING_OPTIONS = [
-  { id: "orders", title: "Order updates", description: "Get notified about order confirmation, preparation, out for delivery and delivery.", icon: "bell" },
-  { id: "offers", title: "Offers and promotions", description: "Receive updates about discounts and special offers.", icon: "tag" },
-  { id: "cooks", title: "New home cooks nearby", description: "Get notified when new home cooks are available at your route.", icon: "cook" },
-  { id: "general", title: "General updates", description: "Important announcements and app updates.", icon: "info" },
-] as const;
+  { id: "order_updates", title: "Order updates", description: "Get notified about order confirmation, preparation, out for delivery and delivery.", icon: "bell" },
+  { id: "offers_promotions", title: "Offers and promotions", description: "Receive updates about discounts and special offers.", icon: "tag" },
+  { id: "nearby_home_cooks", title: "New home cooks nearby", description: "Get notified when new home cooks are available at your route.", icon: "cook" },
+  { id: "general_updates", title: "General updates", description: "Important announcements and app updates.", icon: "info" },
+] as const satisfies readonly {
+  id: NotificationPreferenceCategory;
+  title: string;
+  description: string;
+  icon: "bell" | "tag" | "cook" | "info";
+}[];
+
+function NotificationSettingIcon({
+  icon,
+}: {
+  icon: (typeof SETTING_OPTIONS)[number]["icon"];
+}) {
+  if (icon === "bell") return <NotificationIcon />;
+  if (icon === "tag") return <TagIcon />;
+  if (icon === "cook") return <ShelterIcon />;
+  return <InfoIcon />;
+}
+
+function NotificationPreferenceFeedback({
+  loading,
+  error,
+  onRetry,
+}: {
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  if (loading) {
+    return <p className="ck-settings-feedback" role="status">Loading notification preferences…</p>;
+  }
+  if (error) {
+    return (
+      <p className="ck-settings-feedback is-error" role="alert">
+        {error}{" "}
+        <button type="button" onClick={onRetry}>Try again</button>
+      </p>
+    );
+  }
+  return null;
+}
+
+function NotificationPreferenceSwitch({
+  category,
+  checked,
+  disabled,
+  saving,
+  title,
+  onToggle,
+}: {
+  category: NotificationPreferenceCategory;
+  checked: boolean;
+  disabled: boolean;
+  saving: boolean;
+  title: string;
+  onToggle: (category: NotificationPreferenceCategory) => void;
+}) {
+  return (
+    <button
+      className={`ck-settings-switch${checked ? " is-on" : ""}`}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={title}
+      aria-busy={saving}
+      disabled={disabled}
+      onClick={() => onToggle(category)}
+    >
+      <span />
+    </button>
+  );
+}
 
 function AppSettingsPage() {
-  const [enabled, setEnabled] = useState<Record<(typeof SETTING_OPTIONS)[number]["id"], boolean>>({
-    orders: true,
-    offers: true,
-    cooks: true,
-    general: true,
-  });
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
+  const [preferencesError, setPreferencesError] = useState("");
+  const [reloadPreferences, setReloadPreferences] = useState(0);
+  const [savingPreferences, setSavingPreferences] = useState<
+    Partial<Record<NotificationPreferenceCategory, boolean>>
+  >({});
+  const [saveErrors, setSaveErrors] = useState<
+    Partial<Record<NotificationPreferenceCategory, string>>
+  >({});
   const [language, setLanguage] = useState("English");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingPreferences(true);
+    setPreferencesError("");
+    void getNotificationPreferences(controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setPreferences(result);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setPreferences(null);
+        setPreferencesError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load notification preferences.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingPreferences(false);
+      });
+
+    return () => controller.abort();
+  }, [reloadPreferences]);
+
+  function retryLoadingPreferences() {
+    setPreferences(null);
+    setLoadingPreferences(true);
+    setReloadPreferences((current) => current + 1);
+  }
+
+  async function togglePreference(category: NotificationPreferenceCategory) {
+    if (!preferences || savingPreferences[category]) return;
+
+    const previousValue = preferences[category];
+    const nextValue = !previousValue;
+    const option = SETTING_OPTIONS.find((item) => item.id === category);
+    setPreferences((current) =>
+      current ? { ...current, [category]: nextValue } : current,
+    );
+    setSavingPreferences((current) => ({ ...current, [category]: true }));
+    setSaveErrors((current) => {
+      const next = { ...current };
+      delete next[category];
+      return next;
+    });
+
+    try {
+      const updated = await updateNotificationPreferences({
+        [category]: nextValue,
+      });
+      setPreferences((current) =>
+        current
+          ? {
+              ...current,
+              [category]: updated[category],
+              updatedAt: updated.updatedAt,
+            }
+          : current,
+      );
+    } catch (error) {
+      setPreferences((current) =>
+        current ? { ...current, [category]: previousValue } : current,
+      );
+      const details =
+        error instanceof Error ? ` ${error.message}` : "";
+      setSaveErrors((current) => ({
+        ...current,
+        [category]: `Could not save ${option?.title.toLowerCase() ?? "notification"} preference. Your previous setting was restored.${details}`,
+      }));
+    } finally {
+      setSavingPreferences((current) => ({ ...current, [category]: false }));
+    }
+  }
 
   return (
     <main className="ck-main ck-profile-main ck-app-settings-main">
@@ -6558,29 +7076,39 @@ function AppSettingsPage() {
             <h2>Notifications</h2>
             <p>Choose what updates you want to receive.</p>
           </header>
-          <div className="ck-settings-options">
-            {SETTING_OPTIONS.map((option) => (
-              <div className="ck-settings-option" key={option.id}>
-                <span className="ck-settings-icon">
-                  {option.icon === "bell" ? <NotificationIcon /> : option.icon === "tag" ? <TagIcon /> : option.icon === "cook" ? <ShelterIcon /> : <InfoIcon />}
-                </span>
-                <div className="ck-settings-option-copy">
-                  <strong>{option.title}</strong>
-                  <p>{option.description}</p>
+          <NotificationPreferenceFeedback
+            loading={loadingPreferences}
+            error={preferencesError}
+            onRetry={retryLoadingPreferences}
+          />
+          {preferences ? (
+            <div className="ck-settings-options">
+              {SETTING_OPTIONS.map((option) => (
+                <div className="ck-settings-option" key={option.id}>
+                  <span className="ck-settings-icon">
+                    <NotificationSettingIcon icon={option.icon} />
+                  </span>
+                  <div className="ck-settings-option-copy">
+                    <strong>{option.title}</strong>
+                    <p>{option.description}</p>
+                    {saveErrors[option.id] ? (
+                      <small className="ck-settings-preference-error" role="alert">
+                        {saveErrors[option.id]}
+                      </small>
+                    ) : null}
+                  </div>
+                  <NotificationPreferenceSwitch
+                    category={option.id}
+                    checked={preferences[option.id]}
+                    disabled={Boolean(savingPreferences[option.id])}
+                    saving={Boolean(savingPreferences[option.id])}
+                    title={option.title}
+                    onToggle={togglePreference}
+                  />
                 </div>
-                <button
-                  className={`ck-settings-switch${enabled[option.id] ? " is-on" : ""}`}
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled[option.id]}
-                  aria-label={option.title}
-                  onClick={() => setEnabled((current) => ({ ...current, [option.id]: !current[option.id] }))}
-                >
-                  <span />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : null}
         </section>
         <section className="ck-settings-language">
           <div>
@@ -6604,7 +7132,17 @@ function AppSettingsPage() {
           <span className="ck-settings-arrow">›</span>
         </button>
       </section>
-      <MobileAppSettings language={language} setLanguage={setLanguage} />
+      <MobileAppSettings
+        language={language}
+        setLanguage={setLanguage}
+        preferences={preferences}
+        loadingPreferences={loadingPreferences}
+        preferencesError={preferencesError}
+        savingPreferences={savingPreferences}
+        saveErrors={saveErrors}
+        onRetryPreferences={retryLoadingPreferences}
+        onTogglePreference={togglePreference}
+      />
     </main>
   );
 }
@@ -6612,9 +7150,23 @@ function AppSettingsPage() {
 function MobileAppSettings({
   language,
   setLanguage,
+  preferences,
+  loadingPreferences,
+  preferencesError,
+  savingPreferences,
+  saveErrors,
+  onRetryPreferences,
+  onTogglePreference,
 }: {
   language: string;
   setLanguage: Dispatch<SetStateAction<string>>;
+  preferences: NotificationPreferences | null;
+  loadingPreferences: boolean;
+  preferencesError: string;
+  savingPreferences: Partial<Record<NotificationPreferenceCategory, boolean>>;
+  saveErrors: Partial<Record<NotificationPreferenceCategory, string>>;
+  onRetryPreferences: () => void;
+  onTogglePreference: (category: NotificationPreferenceCategory) => void;
 }) {
   return (
     <section className="ck-mobile-app-settings">
@@ -6670,11 +7222,42 @@ function MobileAppSettings({
       <section className="ck-mobile-app-settings-group">
         <h2>Notifications</h2>
         <div className="ck-mobile-app-settings-card">
+          <NotificationPreferenceFeedback
+            loading={loadingPreferences}
+            error={preferencesError}
+            onRetry={onRetryPreferences}
+          />
+          {preferences
+            ? SETTING_OPTIONS.map((option) => (
+                <div className="ck-mobile-app-settings-row ck-mobile-notification-preference-row" key={option.id}>
+                  <span className="ck-mobile-app-settings-icon">
+                    <NotificationSettingIcon icon={option.icon} />
+                  </span>
+                  <span className="ck-mobile-app-settings-copy">
+                    <strong>{option.title}</strong>
+                    <small>{option.description}</small>
+                    {saveErrors[option.id] ? (
+                      <small className="ck-settings-preference-error" role="alert">
+                        {saveErrors[option.id]}
+                      </small>
+                    ) : null}
+                  </span>
+                  <NotificationPreferenceSwitch
+                    category={option.id}
+                    checked={preferences[option.id]}
+                    disabled={Boolean(savingPreferences[option.id])}
+                    saving={Boolean(savingPreferences[option.id])}
+                    title={option.title}
+                    onToggle={onTogglePreference}
+                  />
+                </div>
+              ))
+            : null}
           <button className="ck-mobile-app-settings-row" type="button" onClick={() => navigate(PATHS.notifications)}>
             <span className="ck-mobile-app-settings-icon"><NotificationIcon /></span>
             <span className="ck-mobile-app-settings-copy">
-              <strong>Notification settings</strong>
-              <small>Manage what you want to be notified about</small>
+              <strong>Notification inbox</strong>
+              <small>View your recent notifications</small>
             </span>
             <span className="ck-mobile-app-settings-arrow" aria-hidden="true">›</span>
           </button>
@@ -6707,12 +7290,8 @@ function MobileAppSettings({
   );
 }
 
-const SUPPORT_FAQS = [
-  { question: "How can I track my order?", answer: "Open My Orders and select View details on an ongoing order to see its latest status." },
-  { question: "Can I cancel my order?", answer: "If your order is still being prepared, open its details and contact support for help with cancellation." },
-  { question: "What payment methods are accepted?", answer: "You can pay using UPI apps such as Google Pay, PhonePe and Paytm, or enter another UPI ID." },
-  { question: "How do I contact a home cook?", answer: "Open your order details to find the pickup information and available order support options." },
-];
+const SUPPORT_FAQS = getFaqsForSurface("support");
+const FAQ_PAGE_CONTENT = getFaqsForSurface("faq");
 
 const MOBILE_HELP_LINKS = [
   { id: "faqs", title: "FAQs", detail: "Find answers to common questions", icon: "faqs" as const },
@@ -6809,25 +7388,95 @@ function MobileHelpSupport() {
   );
 }
 
-const MOBILE_FAQ_CATEGORIES = [
-  { id: "all", label: "All", icon: null },
-  { id: "orders", label: "Orders", icon: "orders" as const },
-  { id: "pickup", label: "Pickup & Journey", icon: "pickup" as const },
-  { id: "payments", label: "Payments", icon: "payments" as const },
-] as const;
-
-const MOBILE_POPULAR_FAQS = [
-  { question: "How can I place an order?", answer: "Choose a kitchen along your route, add meals to your bag, confirm pickup details, and complete payment on Cashfree.", category: "orders" },
-  { question: "Where do I collect my order?", answer: "Collect your order at the pickup point shown on your order summary, usually near the main entrance of the bus stand.", category: "pickup" },
-  { question: "What payment methods are accepted?", answer: "You can pay using UPI apps such as Google Pay, PhonePe and Paytm, or enter another UPI ID.", category: "payments" },
-  { question: "Can I cancel or modify my order?", answer: "If your order is still being prepared, open its details and contact support for help with cancellation or changes.", category: "orders" },
-  { question: "How will I know when my order is ready?", answer: "You’ll get order status updates in the app and notifications when your meal is ready for pickup.", category: "orders" },
-] as const;
-
-function MobileFaqCategoryIcon({ type }: { type: "orders" | "pickup" | "payments" }) {
+function MobileFaqCategoryIcon({ type }: { type: FaqCategory }) {
   if (type === "orders") return <UtensilsIcon />;
   if (type === "pickup") return <BusIcon />;
   return <CreditCardIcon />;
+}
+
+type FaqFilterCategory = (typeof FAQ_CATEGORIES)[number]["id"];
+
+type FaqPageProps = {
+  query: string;
+  setQuery: Dispatch<SetStateAction<string>>;
+  category: FaqFilterCategory;
+  setCategory: Dispatch<SetStateAction<FaqFilterCategory>>;
+  openQuestion: string | null;
+  setOpenQuestion: Dispatch<SetStateAction<string | null>>;
+  filtered: readonly FaqEntry[];
+};
+
+function filterFaqPageContent(
+  query: string,
+  category: FaqFilterCategory,
+): readonly FaqEntry[] {
+  const needle = query.trim().toLowerCase();
+  return FAQ_PAGE_CONTENT.filter((faq) => {
+    const matchesCategory = category === "all" || faq.category === category;
+    const matchesQuery =
+      !needle ||
+      `${faq.question} ${faq.answer ?? ""}`.toLowerCase().includes(needle);
+    return matchesCategory && matchesQuery;
+  });
+}
+
+function FaqsPage() {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<FaqFilterCategory>("all");
+  const [openQuestion, setOpenQuestion] = useState<string | null>(null);
+  const filtered = filterFaqPageContent(query, category);
+  const pageProps = {
+    query,
+    setQuery,
+    category,
+    setCategory,
+    openQuestion,
+    setOpenQuestion,
+    filtered,
+  };
+
+  return (
+    <>
+      <DesktopFaqsPage {...pageProps} />
+      <MobileFaqsPage {...pageProps} />
+    </>
+  );
+}
+
+function FaqAccordionItems({
+  filtered,
+  openQuestion,
+  setOpenQuestion,
+  itemClassName,
+}: Pick<FaqPageProps, "filtered" | "openQuestion" | "setOpenQuestion"> & {
+  itemClassName: string;
+}) {
+  return (
+    <>
+      {filtered.map((faq) => {
+        const open = openQuestion === faq.id;
+        return (
+          <details
+            key={faq.id}
+            className={itemClassName}
+            open={open}
+            onToggle={(event) => {
+              const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
+              setOpenQuestion((current) =>
+                nextOpen ? faq.id : current === faq.id ? null : current,
+              );
+            }}
+          >
+            <summary>
+              <span>{faq.question}</span>
+              <ChevronIcon />
+            </summary>
+            <p>{faq.answer}</p>
+          </details>
+        );
+      })}
+    </>
+  );
 }
 
 function UtensilsIcon() {
@@ -6841,20 +7490,103 @@ function UtensilsIcon() {
   );
 }
 
-function MobileFaqsPage() {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<(typeof MOBILE_FAQ_CATEGORIES)[number]["id"]>("all");
-  const [openQuestion, setOpenQuestion] = useState<string | null>(null);
-
-  const filtered = MOBILE_POPULAR_FAQS.filter((faq) => {
-    const matchesCategory = category === "all" || faq.category === category;
-    const needle = query.trim().toLowerCase();
-    const matchesQuery = !needle || `${faq.question} ${faq.answer}`.toLowerCase().includes(needle);
-    return matchesCategory && matchesQuery;
-  });
-
+function DesktopFaqsPage({
+  query,
+  setQuery,
+  category,
+  setCategory,
+  openQuestion,
+  setOpenQuestion,
+  filtered,
+}: FaqPageProps) {
   return (
-    <main className="ck-main ck-profile-main">
+    <main className="ck-main ck-profile-main ck-faq-desktop-shell">
+      <AccountSidebar active="support" />
+      <section className="ck-profile-content ck-account-content ck-desktop-faqs">
+        <header className="ck-profile-heading">
+          <h1>Frequently asked questions</h1>
+          <p>Find answers to your questions about Aahaa.</p>
+        </header>
+        <label className="ck-support-search ck-desktop-faqs-search">
+          <SearchIcon />
+          <span className="ck-visually-hidden">Search FAQs</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search for help (e.g., orders, payment)"
+          />
+          <button
+            type="button"
+            onClick={() => setQuery((current) => current.trim())}
+          >
+            Search
+          </button>
+        </label>
+        <div className="ck-mobile-faqs-tabs ck-desktop-faqs-tabs" role="tablist" aria-label="FAQ categories">
+          {FAQ_CATEGORIES.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={category === tab.id}
+              className={category === tab.id ? "is-active" : undefined}
+              onClick={() => setCategory(tab.id)}
+            >
+              {tab.id !== "all" ? (
+                <MobileFaqCategoryIcon type={tab.id} />
+              ) : null}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <section className="ck-desktop-faqs-list">
+          <h2>Popular questions</h2>
+          <div className="ck-desktop-faqs-items">
+            <FaqAccordionItems
+              filtered={filtered}
+              openQuestion={openQuestion}
+              setOpenQuestion={setOpenQuestion}
+              itemClassName="ck-desktop-faqs-item"
+            />
+            {filtered.length === 0 ? (
+              <p className="ck-support-no-results">
+                No matching questions. Try another search.
+              </p>
+            ) : null}
+          </div>
+        </section>
+        <aside className="ck-support-card ck-desktop-faqs-contact">
+          <div className="ck-support-card-intro">
+            <span className="ck-settings-icon"><HeadsetIcon /></span>
+            <span>
+              <strong>Need more help?</strong>
+              <small>Continue to Aahaa support chat.</small>
+            </span>
+          </div>
+          <button
+            className="ck-support-contact"
+            type="button"
+            onClick={() => navigate(PATHS.chatSupport)}
+          >
+            <ChatBubbleIcon />Contact support <span>›</span>
+          </button>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
+function MobileFaqsPage({
+  query,
+  setQuery,
+  category,
+  setCategory,
+  openQuestion,
+  setOpenQuestion,
+  filtered,
+}: FaqPageProps) {
+  return (
+    <main className="ck-main ck-profile-main ck-faq-mobile-shell">
       <section className="ck-mobile-faqs">
         <header className="ck-mobile-faqs-header">
           <button type="button" aria-label="Back to help and support" onClick={() => navigate(PATHS.helpSupport)}>
@@ -6878,7 +7610,7 @@ function MobileFaqsPage() {
           />
         </label>
         <div className="ck-mobile-faqs-tabs" role="tablist" aria-label="FAQ categories">
-          {MOBILE_FAQ_CATEGORIES.map((tab) => (
+          {FAQ_CATEGORIES.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -6887,33 +7619,21 @@ function MobileFaqsPage() {
               className={category === tab.id ? "is-active" : undefined}
               onClick={() => setCategory(tab.id)}
             >
-              {tab.icon ? <MobileFaqCategoryIcon type={tab.icon} /> : null}
+              {tab.id !== "all" ? (
+                <MobileFaqCategoryIcon type={tab.id} />
+              ) : null}
               {tab.label}
             </button>
           ))}
         </div>
         <section className="ck-mobile-faqs-list">
           <h2>Popular questions</h2>
-          {filtered.map((faq) => {
-            const open = openQuestion === faq.question;
-            return (
-              <details
-                key={faq.question}
-                className="ck-mobile-faqs-item"
-                open={open}
-                onToggle={(event) => {
-                  const nextOpen = (event.currentTarget as HTMLDetailsElement).open;
-                  setOpenQuestion(nextOpen ? faq.question : null);
-                }}
-              >
-                <summary>
-                  <span>{faq.question}</span>
-                  <ChevronIcon />
-                </summary>
-                <p>{faq.answer}</p>
-              </details>
-            );
-          })}
+          <FaqAccordionItems
+            filtered={filtered}
+            openQuestion={openQuestion}
+            setOpenQuestion={setOpenQuestion}
+            itemClassName="ck-mobile-faqs-item"
+          />
           {filtered.length === 0 ? <p className="ck-mobile-faqs-empty">No matching questions. Try another search.</p> : null}
         </section>
         <aside className="ck-mobile-faqs-cta">
@@ -6985,13 +7705,59 @@ function MobileChatSupportPage() {
   const [messages, setMessages] = useState<MobileChatMessage[]>([
     { id: "welcome", from: "agent", text: "Hello! Welcome to Aahaa support. How can I help you today?", time: "9:41 AM" },
   ]);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const nextMessageId = useRef(0);
+  const lastExchangeRef = useRef<{ text: string; timestamp: number } | null>(null);
+
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (thread) thread.scrollTop = thread.scrollHeight;
+  }, [messages]);
+
+  function addConversationTurn(userText: string, supportText: string) {
+    const timestamp = Date.now();
+    const normalizedText = userText.trim().toLowerCase().replace(/\s+/g, " ");
+    const lastExchange = lastExchangeRef.current;
+    if (
+      lastExchange?.text === normalizedText &&
+      timestamp - lastExchange.timestamp < 500
+    ) {
+      return;
+    }
+    lastExchangeRef.current = { text: normalizedText, timestamp };
+    const now = new Date(timestamp);
+    const time = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const userMessage: MobileChatMessage = {
+      id: `message-${nextMessageId.current++}`,
+      from: "user",
+      text: userText,
+      time,
+    };
+    const supportMessage: MobileChatMessage = {
+      id: `message-${nextMessageId.current++}`,
+      from: "agent",
+      text: supportText,
+      time,
+    };
+    setMessages((current) => [...current, userMessage, supportMessage]);
+  }
+
+  function sendSuggestedQuestion(question: (typeof SUPPORT_CHAT_QUESTIONS)[number]) {
+    addConversationTurn(question.question, question.answer);
+  }
 
   function sendMessage() {
     const text = draft.trim();
     if (!text) return;
-    const now = new Date();
-    const time = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    setMessages((current) => [...current, { id: `user-${now.getTime()}`, from: "user", text, time }]);
+    const normalizedText = text.toLowerCase().replace(/\s+/g, " ");
+    const matchingQuestion = SUPPORT_CHAT_QUESTIONS.find(
+      (question) =>
+        question.question.toLowerCase().replace(/\s+/g, " ") === normalizedText,
+    );
+    addConversationTurn(
+      text,
+      matchingQuestion?.answer ?? UNSUPPORTED_SUPPORT_CHAT_ANSWER,
+    );
     setDraft("");
   }
 
@@ -7018,7 +7784,21 @@ function MobileChatSupportPage() {
         <div className="ck-mobile-chat-divider" role="separator">
           <span>Today</span>
         </div>
-        <div className="ck-mobile-chat-thread">
+        <section className="ck-mobile-chat-common-questions" aria-labelledby="ck-chat-common-questions-title">
+          <h2 id="ck-chat-common-questions-title">Common questions</h2>
+          <div className="ck-mobile-chat-question-list">
+            {SUPPORT_CHAT_QUESTIONS.map((question) => (
+              <button
+                key={question.id}
+                type="button"
+                onClick={() => sendSuggestedQuestion(question)}
+              >
+                {question.question}
+              </button>
+            ))}
+          </div>
+        </section>
+        <div className="ck-mobile-chat-thread" ref={threadRef} aria-live="polite">
           {messages.map((message) => (
             <article
               key={message.id}
@@ -7471,7 +8251,11 @@ function HelpSupportPage() {
   const [query, setQuery] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
   const [contactNotice, setContactNotice] = useState(false);
-  const filteredFaqs = SUPPORT_FAQS.filter((faq) => `${faq.question} ${faq.answer}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredFaqs = SUPPORT_FAQS.filter((faq) =>
+    `${faq.question} ${faq.answer ?? ""}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
 
   return (
     <main className="ck-main ck-profile-main">
